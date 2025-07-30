@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Analysis Dashboard - Simple Controls</title>
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background: #121212;
+            color: #fff;
+            overflow: hidden;
+        }
+        
+        #loading-indicator {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(18, 18, 18, 0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(66, 135, 245, 0.3);
+            border-top: 4px solid #4287f5;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .app-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: rgba(26, 26, 26, 0.9);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            z-index: 1000;
+        }
+        
+        .controls-info {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        
+        #hover-info {
+            position: fixed;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            display: none;
+            z-index: 1001;
+            max-width: 300px;
+        }
+        
+        #selected-info {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 4px;
+            font-size: 14px;
+            display: none;
+            width: 250px;
+        }
+        
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading-indicator">
+        <div class="loading-spinner"></div>
+    </div>
+    
+    <div class="app-header">
+        <h1>Video Analysis Dashboard</h1>
+        <div style="margin-left: auto;">
+            <span id="status">Initializing...</span>
+        </div>
+    </div>
+    
+    <div class="controls-info">
+        <strong>Controls:</strong><br>
+        • Drag: Rotate<br>
+        • Scroll: Zoom<br>
+        • Arrow Keys: Move<br>
+        • Click: Select point<br>
+        • Hover: View details
+    </div>
+    
+    <div id="hover-info"></div>
+    <div id="selected-info"></div>
+
+    <!-- Load Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <script>
+        // Simple app with manual controls
+        class SimpleVisualization {
+            constructor() {
+                this.scene = new THREE.Scene();
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                
+                // Camera controls
+                this.cameraDistance = 50;
+                this.cameraAngleX = 0;
+                this.cameraAngleY = Math.PI / 4;
+                
+                // Mouse state
+                this.isDragging = false;
+                this.previousMousePosition = { x: 0, y: 0 };
+                
+                // Raycasting for interaction
+                this.raycaster = new THREE.Raycaster();
+                this.mouse = new THREE.Vector2();
+                this.points = null;
+                this.videos = [];
+                
+                this.init();
+            }
+            
+            init() {
+                // Setup renderer
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(window.devicePixelRatio);
+                document.body.appendChild(this.renderer.domElement);
+                
+                // Setup scene
+                this.scene.background = new THREE.Color(0x121212);
+                
+                // Add lights
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                this.scene.add(ambientLight);
+                
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
+                directionalLight.position.set(10, 10, 10);
+                this.scene.add(directionalLight);
+                
+                // Add grid
+                const gridHelper = new THREE.GridHelper(100, 20, 0x444444, 0x222222);
+                this.scene.add(gridHelper);
+                
+                // Update camera position
+                this.updateCameraPosition();
+                
+                // Setup mouse controls
+                this.setupControls();
+                
+                // Handle resize
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+            }
+            
+            setupControls() {
+                const canvas = this.renderer.domElement;
+                
+                // Mouse down
+                canvas.addEventListener('mousedown', (e) => {
+                    this.isDragging = true;
+                    this.previousMousePosition = {
+                        x: e.clientX,
+                        y: e.clientY
+                    };
+                    canvas.style.cursor = 'grabbing';
+                });
+                
+                // Mouse move
+                canvas.addEventListener('mousemove', (e) => {
+                    // Update mouse position for raycasting
+                    this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                    this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+                    
+                    if (this.isDragging) {
+                        const deltaMove = {
+                            x: e.clientX - this.previousMousePosition.x,
+                            y: e.clientY - this.previousMousePosition.y
+                        };
+                        
+                        // Update camera angles
+                        this.cameraAngleX += deltaMove.x * 0.01;
+                        this.cameraAngleY -= deltaMove.y * 0.01;
+                        
+                        // Clamp vertical angle
+                        this.cameraAngleY = Math.max(0.1, Math.min(Math.PI - 0.1, this.cameraAngleY));
+                        
+                        this.updateCameraPosition();
+                        
+                        this.previousMousePosition = {
+                            x: e.clientX,
+                            y: e.clientY
+                        };
+                    } else {
+                        // Check for hover when not dragging
+                        this.checkHover(e);
+                    }
+                });
+                
+                // Mouse up
+                canvas.addEventListener('mouseup', (e) => {
+                    if (!this.isDragging && e.button === 0) {
+                        // Click event - select point
+                        this.checkClick(e);
+                    }
+                    this.isDragging = false;
+                    canvas.style.cursor = 'grab';
+                });
+                
+                // Mouse leave
+                canvas.addEventListener('mouseleave', () => {
+                    this.isDragging = false;
+                    canvas.style.cursor = 'grab';
+                });
+                
+                // Mouse wheel for zoom
+                canvas.addEventListener('wheel', (e) => {
+                    e.preventDefault();
+                    this.cameraDistance += e.deltaY * 0.05;
+                    this.cameraDistance = Math.max(10, Math.min(200, this.cameraDistance));
+                    this.updateCameraPosition();
+                });
+                
+                // Keyboard controls
+                window.addEventListener('keydown', (e) => {
+                    switch(e.key) {
+                        case 'ArrowUp':
+                            this.cameraAngleY -= 0.1;
+                            break;
+                        case 'ArrowDown':
+                            this.cameraAngleY += 0.1;
+                            break;
+                        case 'ArrowLeft':
+                            this.cameraAngleX -= 0.1;
+                            break;
+                        case 'ArrowRight':
+                            this.cameraAngleX += 0.1;
+                            break;
+                    }
+                    this.cameraAngleY = Math.max(0.1, Math.min(Math.PI - 0.1, this.cameraAngleY));
+                    this.updateCameraPosition();
+                });
+                
+                // Initial cursor
+                canvas.style.cursor = 'grab';
+            }
+            
+            updateCameraPosition() {
+                // Calculate camera position from spherical coordinates
+                this.camera.position.x = this.cameraDistance * Math.sin(this.cameraAngleY) * Math.cos(this.cameraAngleX);
+                this.camera.position.y = this.cameraDistance * Math.cos(this.cameraAngleY);
+                this.camera.position.z = this.cameraDistance * Math.sin(this.cameraAngleY) * Math.sin(this.cameraAngleX);
+                
+                // Look at center
+                this.camera.lookAt(0, 0, 0);
+            }
+            
+            async loadData() {
+                try {
+                    const response = await fetch('/api/videos?page=1&per_page=500');
+                    const data = await response.json();
+                    const videos = data.videos || [];
+                    
+                    console.log(`Loaded ${videos.length} videos`);
+                    document.getElementById('status').textContent = `${videos.length} videos loaded`;
+                    
+                    // Create points
+                    const geometry = new THREE.BufferGeometry();
+                    const positions = new Float32Array(videos.length * 3);
+                    const colors = new Float32Array(videos.length * 3);
+                    
+                    videos.forEach((video, i) => {
+                        // Position
+                        if (video.coordinates) {
+                            positions[i * 3] = video.coordinates.x * 10;
+                            positions[i * 3 + 1] = video.coordinates.y * 10;
+                            positions[i * 3 + 2] = video.coordinates.z * 10;
+                        } else {
+                            positions[i * 3] = (Math.random() - 0.5) * 40;
+                            positions[i * 3 + 1] = (Math.random() - 0.5) * 40;
+                            positions[i * 3 + 2] = (Math.random() - 0.5) * 40;
+                        }
+                        
+                        // Color
+                        const anomaly = video.anomaly_score || 0;
+                        colors[i * 3] = anomaly;
+                        colors[i * 3 + 1] = 1 - anomaly;
+                        colors[i * 3 + 2] = 0.5;
+                    });
+                    
+                    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+                    
+                    const material = new THREE.PointsMaterial({
+                        size: 3,
+                        vertexColors: true,
+                        sizeAttenuation: true
+                    });
+                    
+                    this.points = new THREE.Points(geometry, material);
+                    this.scene.add(this.points);
+                    
+                    // Store videos for interaction
+                    this.videos = videos;
+                    
+                    // Hide loading
+                    document.getElementById('loading-indicator').style.display = 'none';
+                    
+                } catch (error) {
+                    console.error('Failed to load data:', error);
+                    document.getElementById('status').textContent = 'Error loading data';
+                }
+            }
+            
+            checkHover(event) {
+                if (!this.points) return;
+                
+                this.raycaster.setFromCamera(this.mouse, this.camera);
+                const intersects = this.raycaster.intersectObject(this.points);
+                
+                const hoverInfo = document.getElementById('hover-info');
+                
+                if (intersects.length > 0) {
+                    const index = intersects[0].index;
+                    const video = this.videos[index];
+                    
+                    hoverInfo.innerHTML = `
+                        <strong>${video.title || video.video_id}</strong><br>
+                        Event: ${video.main_event || 'Unknown'}<br>
+                        Location: ${video.location || 'Unknown'}<br>
+                        Anomaly: ${(video.anomaly_score * 100).toFixed(1)}%<br>
+                        Cluster: ${video.cluster_id !== undefined ? video.cluster_id : 'N/A'}
+                    `;
+                    hoverInfo.style.display = 'block';
+                    hoverInfo.style.left = event.clientX + 10 + 'px';
+                    hoverInfo.style.top = event.clientY - 10 + 'px';
+                    
+                    this.renderer.domElement.style.cursor = 'pointer';
+                } else {
+                    hoverInfo.style.display = 'none';
+                    if (!this.isDragging) {
+                        this.renderer.domElement.style.cursor = 'grab';
+                    }
+                }
+            }
+            
+            checkClick(event) {
+                if (!this.points) return;
+                
+                this.raycaster.setFromCamera(this.mouse, this.camera);
+                const intersects = this.raycaster.intersectObject(this.points);
+                
+                if (intersects.length > 0) {
+                    const index = intersects[0].index;
+                    const video = this.videos[index];
+                    
+                    // Update selected info panel
+                    const selectedInfo = document.getElementById('selected-info');
+                    selectedInfo.innerHTML = `
+                        <h3>Selected Video</h3>
+                        <strong>${video.title || video.video_id}</strong><br><br>
+                        <strong>Details:</strong><br>
+                        Event: ${video.main_event || 'Unknown'}<br>
+                        Location: ${video.location || 'Unknown'}<br>
+                        Time: ${video.event_time || 'Unknown'}<br>
+                        Duration: ${video.duration || 'Unknown'}s<br><br>
+                        <strong>Analysis:</strong><br>
+                        Anomaly Score: ${(video.anomaly_score * 100).toFixed(1)}%<br>
+                        Cluster ID: ${video.cluster_id !== undefined ? video.cluster_id : 'N/A'}<br>
+                        Weather: ${video.weather_condition || 'Unknown'}<br>
+                        Scene: ${video.scene_description || 'N/A'}
+                    `;
+                    selectedInfo.style.display = 'block';
+                    
+                    // Update status
+                    document.getElementById('status').textContent = `Selected: ${video.title || video.video_id}`;
+                    
+                    // Highlight selected point
+                    this.highlightPoint(index);
+                }
+            }
+            
+            highlightPoint(index) {
+                const colors = this.points.geometry.attributes.color.array;
+                
+                // Reset all colors
+                this.videos.forEach((video, i) => {
+                    const anomaly = video.anomaly_score || 0;
+                    colors[i * 3] = anomaly;
+                    colors[i * 3 + 1] = 1 - anomaly;
+                    colors[i * 3 + 2] = 0.5;
+                });
+                
+                // Highlight selected
+                colors[index * 3] = 1;
+                colors[index * 3 + 1] = 1;
+                colors[index * 3 + 2] = 0;
+                
+                this.points.geometry.attributes.color.needsUpdate = true;
+            }
+            
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                this.renderer.render(this.scene, this.camera);
+            }
+            
+            start() {
+                this.loadData();
+                this.animate();
+            }
+        }
+        
+        // Start when ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                const app = new SimpleVisualization();
+                app.start();
+            });
+        } else {
+            const app = new SimpleVisualization();
+            app.start();
+        }
+    </script>
+</body>
+</html>

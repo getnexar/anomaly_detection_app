@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Verify Fixed Version</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #f0f0f0; }
+        .test { margin: 10px 0; padding: 10px; background: white; border-radius: 4px; }
+        .success { border-left: 4px solid #4CAF50; }
+        .error { border-left: 4px solid #F44336; }
+        .info { border-left: 4px solid #2196F3; }
+        .warning { border-left: 4px solid #FF9800; }
+        iframe { width: 100%; height: 600px; border: 2px solid #333; margin-top: 20px; }
+        button { margin: 5px; padding: 10px 20px; font-size: 16px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Verifying Fixed Version</h1>
+    
+    <button onclick="runAllTests()">Run All Tests</button>
+    <button onclick="checkLoadingStatus()">Check Loading Status</button>
+    <button onclick="inspectApp()">Inspect App State</button>
+    
+    <div id="results"></div>
+    
+    <h2>Fixed App:</h2>
+    <iframe id="app-frame" src="/index-fixed.html"></iframe>
+    
+    <script>
+        const results = document.getElementById('results');
+        const iframe = document.getElementById('app-frame');
+        let testCount = 0;
+        
+        function log(message, type = 'info') {
+            testCount++;
+            const div = document.createElement('div');
+            div.className = `test ${type}`;
+            div.innerHTML = `[${testCount}] ${new Date().toLocaleTimeString()} - ${message}`;
+            results.appendChild(div);
+            console.log(`[${type}] ${message}`);
+        }
+        
+        function checkLoadingStatus() {
+            try {
+                const win = iframe.contentWindow;
+                const loader = win.document.getElementById('loading-indicator');
+                
+                if (!loader) {
+                    log('Loading indicator element not found', 'error');
+                    return false;
+                }
+                
+                const isVisible = loader.style.display !== 'none' && 
+                                window.getComputedStyle(loader).display !== 'none';
+                
+                if (isVisible) {
+                    log('❌ LOADING STILL VISIBLE!', 'error');
+                    log(`Display style: ${loader.style.display}`, 'info');
+                    log(`Computed display: ${window.getComputedStyle(loader).display}`, 'info');
+                    return false;
+                } else {
+                    log('✅ Loading indicator is hidden!', 'success');
+                    return true;
+                }
+            } catch (e) {
+                log(`Error checking loading status: ${e.message}`, 'error');
+                return false;
+            }
+        }
+        
+        function inspectApp() {
+            try {
+                const win = iframe.contentWindow;
+                
+                // Check if THREE.js is loaded
+                if (win.THREE) {
+                    log('✅ THREE.js is loaded globally', 'success');
+                    log(`THREE.js version: ${win.THREE.REVISION}`, 'info');
+                } else {
+                    log('❌ THREE.js NOT found', 'error');
+                }
+                
+                // Check if OrbitControls is loaded
+                if (win.THREE && win.THREE.OrbitControls) {
+                    log('✅ OrbitControls is loaded', 'success');
+                } else {
+                    log('❌ OrbitControls NOT found', 'error');
+                }
+                
+                // Check if app instance exists
+                if (win.videoAnalysisApp) {
+                    log('✅ App instance exists', 'success');
+                    
+                    // Check app state
+                    const state = win.videoAnalysisApp.appState;
+                    log(`Total videos: ${state.totalVideos}`, 'info');
+                    log(`Visible points: ${state.visiblePoints.length}`, 'info');
+                    log(`Is loading: ${state.isLoading}`, state.isLoading ? 'warning' : 'info');
+                    
+                    // Check visualization
+                    if (win.videoAnalysisApp.visualization) {
+                        log('✅ Visualization component exists', 'success');
+                        
+                        if (win.videoAnalysisApp.visualization.renderer) {
+                            log('✅ THREE.js renderer exists', 'success');
+                        } else {
+                            log('❌ THREE.js renderer NOT found', 'error');
+                        }
+                        
+                        if (win.videoAnalysisApp.visualization.pointCloud) {
+                            log('✅ Point cloud is loaded', 'success');
+                            const points = win.videoAnalysisApp.visualization.renderStats.pointsRendered;
+                            log(`Points rendered: ${points}`, 'info');
+                        } else {
+                            log('⚠️ Point cloud not loaded yet', 'warning');
+                        }
+                    } else {
+                        log('❌ Visualization component NOT found', 'error');
+                    }
+                } else {
+                    log('❌ App instance NOT found', 'error');
+                }
+                
+                // Check for console errors
+                const errors = win.console._errors || [];
+                if (errors.length > 0) {
+                    log(`⚠️ Found ${errors.length} console errors`, 'warning');
+                }
+                
+            } catch (e) {
+                log(`Error inspecting app: ${e.message}`, 'error');
+            }
+        }
+        
+        async function runAllTests() {
+            results.innerHTML = '';
+            testCount = 0;
+            
+            log('Starting comprehensive tests...', 'info');
+            
+            // Wait for iframe to load
+            await new Promise(resolve => {
+                if (iframe.contentWindow.document.readyState === 'complete') {
+                    resolve();
+                } else {
+                    iframe.onload = resolve;
+                }
+            });
+            
+            log('Iframe loaded, waiting 3 seconds for app initialization...', 'info');
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
+            // Test 1: Check loading status
+            log('Test 1: Checking loading status...', 'info');
+            const loadingHidden = checkLoadingStatus();
+            
+            // Test 2: Inspect app
+            log('Test 2: Inspecting app components...', 'info');
+            inspectApp();
+            
+            // Test 3: Check if canvas is rendering
+            log('Test 3: Checking canvas rendering...', 'info');
+            try {
+                const win = iframe.contentWindow;
+                const canvas = win.document.querySelector('canvas');
+                if (canvas) {
+                    log('✅ Canvas element found', 'success');
+                    log(`Canvas size: ${canvas.width}x${canvas.height}`, 'info');
+                } else {
+                    log('❌ Canvas element NOT found', 'error');
+                }
+            } catch (e) {
+                log(`Error checking canvas: ${e.message}`, 'error');
+            }
+            
+            // Summary
+            if (loadingHidden) {
+                log('🎉 SUCCESS! The app has loaded properly!', 'success');
+            } else {
+                log('❌ FAILED! The app is still showing loading screen', 'error');
+            }
+        }
+        
+        // Auto-run tests after 5 seconds
+        setTimeout(() => {
+            log('Auto-running tests after 5 seconds...', 'info');
+            runAllTests();
+        }, 5000);
+    </script>
+</body>
+</html>

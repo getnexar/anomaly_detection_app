@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Video Analysis Explorer</title>
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/modal.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-left">
+                <h1 class="app-title">
+                    <span class="title-icon">🎥</span>
+                    Video Analysis Explorer
+                </h1>
+                <p class="app-subtitle">Explore 450k+ dashcam videos in 3D space</p>
+            </div>
+            <div class="header-right">
+                <div class="search-container">
+                    <input type="text" 
+                           id="search-input" 
+                           class="search-input" 
+                           placeholder="Search videos..."
+                           autocomplete="off">
+                    <button id="search-btn" class="search-btn">
+                        <span class="icon">🔍</span>
+                    </button>
+                </div>
+                <button id="settings-btn" class="header-btn" title="Settings">
+                    <span class="icon">⚙️</span>
+                </button>
+                <button id="help-btn" class="header-btn" title="Help">
+                    <span class="icon">❓</span>
+                </button>
+            </div>
+        </header>
+        
+        <!-- Main Content -->
+        <main class="app-main">
+            <!-- Control Panel -->
+            <aside id="control-panel" class="control-panel">
+                <div class="panel-section">
+                    <h3 class="section-title">
+                        <span class="section-icon">◀</span>
+                        Controls
+                    </h3>
+                </div>
+                
+                <!-- Filters Section -->
+                <div class="panel-section">
+                    <h3 class="section-title">Filters</h3>
+                    <div class="filters-container">
+                        <div class="filter-group">
+                            <label for="filter-event">Event Type:</label>
+                            <select id="filter-event" class="filter-select">
+                                <option value="">Loading...</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="filter-location">Location:</label>
+                            <select id="filter-location" class="filter-select">
+                                <option value="">Loading...</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="filter-weather">Weather:</label>
+                            <select id="filter-weather" class="filter-select">
+                                <option value="">Loading...</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="anomaly-threshold">Anomaly Threshold:</label>
+                            <div class="threshold-control">
+                                <input type="range" 
+                                       id="anomaly-threshold" 
+                                       min="0" 
+                                       max="1" 
+                                       step="0.1" 
+                                       value="0.5"
+                                       class="threshold-slider">
+                                <span id="threshold-value" class="threshold-value">0.5</span>
+                            </div>
+                        </div>
+                        <div class="filter-actions">
+                            <button id="apply-filters" class="btn btn-primary">Apply Filters</button>
+                            <button id="clear-filters" class="btn btn-secondary">Clear All</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Clusters Section -->
+                <div class="panel-section">
+                    <h3 class="section-title">Clusters</h3>
+                    <div class="clusters-list" id="clusters-list">
+                        <div class="loading-placeholder">Loading clusters...</div>
+                    </div>
+                    <div class="cluster-actions">
+                        <button id="focus-largest-cluster" class="btn btn-secondary">Focus Largest</button>
+                        <button id="clear-cluster-highlights" class="btn btn-secondary">Clear Highlights</button>
+                    </div>
+                </div>
+                
+                <!-- Anomalies Section -->
+                <div class="panel-section">
+                    <h3 class="section-title">Anomalies</h3>
+                    <div class="anomaly-controls">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="highlight-anomalies">
+                            <span>Highlight Anomalies</span>
+                        </label>
+                        <button id="focus-anomalies" class="btn btn-secondary">Focus Top Anomalies</button>
+                    </div>
+                    <div class="anomalies-list" id="anomalies-list">
+                        <div class="loading-placeholder">Loading anomalies...</div>
+                    </div>
+                </div>
+                
+                <!-- Statistics Section -->
+                <div class="panel-section">
+                    <h3 class="section-title">Statistics</h3>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-label">Total Videos:</div>
+                            <div class="stat-value" id="stat-total">0</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Visible:</div>
+                            <div class="stat-value" id="stat-visible">0</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Clusters:</div>
+                            <div class="stat-value" id="stat-clusters">0</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">High Anomalies:</div>
+                            <div class="stat-value" id="stat-anomalies">0</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Navigation Section -->
+                <div class="panel-section">
+                    <h3 class="section-title">Navigation</h3>
+                    <div class="nav-buttons">
+                        <button id="fit-all" class="btn btn-secondary">Fit All</button>
+                        <button id="reset-view" class="btn btn-secondary">Reset View</button>
+                    </div>
+                </div>
+            </aside>
+            
+            <!-- 3D Visualization Container -->
+            <div id="visualization-container" class="visualization-container">
+                <canvas id="three-canvas"></canvas>
+                
+                <!-- Tooltip -->
+                <div id="tooltip" class="tooltip" style="display: none;">
+                    <div class="tooltip-content">
+                        <div class="tooltip-title"></div>
+                        <div class="tooltip-details"></div>
+                    </div>
+                </div>
+                
+                <div id="loading-indicator" class="loading-overlay">
+                    <div class="loading-spinner"></div>
+                    <div class="loading-text">Loading video data...</div>
+                </div>
+                
+                <div id="fps-counter" class="fps-counter">FPS: --</div>
+                
+                <!-- Navigation Controls -->
+                <div class="nav-controls">
+                    <button id="zoom-in" class="nav-btn" title="Zoom In">+</button>
+                    <button id="zoom-out" class="nav-btn" title="Zoom Out">-</button>
+                    <button id="reset-camera" class="nav-btn" title="Reset Camera">🏠</button>
+                    <button id="toggle-grid" class="nav-btn" title="Toggle Grid">📐</button>
+                    <button id="toggle-fullscreen" class="nav-btn" title="Fullscreen">⛶</button>
+                    <button id="locate-video" class="nav-btn" title="Locate Video">🎯</button>
+                </div>
+                
+                <!-- Legend -->
+                <div class="legend">
+                    <h4 class="legend-title">Event Types</h4>
+                    <div class="legend-items">
+                        <div class="legend-item">
+                            <span class="legend-color" style="background: #4CAF50;"></span>
+                            <span class="legend-label">Normal Driving</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color" style="background: #F44336;"></span>
+                            <span class="legend-label">Accident</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color" style="background: #FF9800;"></span>
+                            <span class="legend-label">Abrupt Overtaking</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color" style="background: #2196F3;"></span>
+                            <span class="legend-label">Pedestrian Crossing</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color" style="background: #9E9E9E;"></span>
+                            <span class="legend-label">Unknown</span>
+                        </div>
+                    </div>
+                    <div class="legend-section">
+                        <h5 class="legend-subtitle">Anomaly Score</h5>
+                        <div class="legend-gradient">
+                            <span class="gradient-label">Low</span>
+                            <div class="gradient-bar"></div>
+                            <span class="gradient-label">High</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Performance Stats -->
+                <div class="perf-stats">
+                    <div class="perf-item">
+                        <span class="perf-label">⚠️</span>
+                        <span class="perf-value" id="anomaly-count">0</span>
+                    </div>
+                    <div class="perf-item">
+                        <span class="perf-label">📊</span>
+                        <span class="perf-value" id="cluster-count">0</span>
+                    </div>
+                    <div class="perf-item">
+                        <span class="perf-label">Points:</span>
+                        <span class="perf-value" id="point-count">0</span>
+                    </div>
+                    <div class="perf-item">
+                        <span class="perf-label">Render:</span>
+                        <span class="perf-value" id="render-time">0ms</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+        
+        <!-- Modals -->
+        <div id="detail-modal"></div>
+        <div id="video-player-modal"></div>
+        
+        <!-- Settings Modal -->
+        <div id="settings-modal" class="modal" style="display: none;">
+            <div class="modal-backdrop"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Settings</h2>
+                    <button class="close-btn">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="settings-section">
+                        <h3>Visualization</h3>
+                        <label class="setting-item">
+                            <input type="checkbox" id="setting-show-grid" checked>
+                            <span>Show Grid</span>
+                        </label>
+                        <label class="setting-item">
+                            <input type="checkbox" id="setting-show-axes" checked>
+                            <span>Show Axes</span>
+                        </label>
+                        <label class="setting-item">
+                            <input type="checkbox" id="setting-animate-points" checked>
+                            <span>Animate Points</span>
+                        </label>
+                    </div>
+                    <div class="settings-section">
+                        <h3>Performance</h3>
+                        <label class="setting-item">
+                            <span>Max Points:</span>
+                            <input type="number" id="setting-max-points" value="10000" min="100" max="50000">
+                        </label>
+                        <label class="setting-item">
+                            <span>Point Size:</span>
+                            <input type="range" id="setting-point-size" min="1" max="10" value="3">
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Help Modal -->
+        <div id="help-modal" class="modal" style="display: none;">
+            <div class="modal-backdrop"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Help & Controls</h2>
+                    <button class="close-btn">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="help-section">
+                        <h3>Navigation</h3>
+                        <ul>
+                            <li><strong>Left Click + Drag:</strong> Rotate camera</li>
+                            <li><strong>Right Click + Drag:</strong> Pan camera</li>
+                            <li><strong>Scroll:</strong> Zoom in/out</li>
+                            <li><strong>Double Click:</strong> Focus on point</li>
+                        </ul>
+                    </div>
+                    <div class="help-section">
+                        <h3>Keyboard Shortcuts</h3>
+                        <ul>
+                            <li><strong>Space:</strong> Play/Pause animation</li>
+                            <li><strong>R:</strong> Reset camera view</li>
+                            <li><strong>F:</strong> Toggle fullscreen</li>
+                            <li><strong>G:</strong> Toggle grid</li>
+                            <li><strong>H:</strong> Toggle this help</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <!-- Load Three.js globally first -->
+    <script src="https://unpkg.com/three@0.150.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.150.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <!-- Create module shim for Three.js -->
+    <script>
+        window.THREE = THREE;
+        window.OrbitControls = THREE.OrbitControls;
+    </script>
+    
+    <!-- Load our app with cache buster -->
+    <script type="module" src="js/main-fixed.js?v=1"></script>
+</body>
+</html>

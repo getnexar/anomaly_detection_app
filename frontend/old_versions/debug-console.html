@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Console for Fixed App</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #fff; }
+        .console { background: #000; padding: 10px; height: 300px; overflow-y: auto; border: 1px solid #444; margin-bottom: 20px; }
+        .log { margin: 2px 0; }
+        .error { color: #ff6b6b; }
+        .warn { color: #ffd93d; }
+        .info { color: #4ecdc4; }
+        .success { color: #51cf66; }
+        iframe { width: 100%; height: 600px; border: 2px solid #444; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Debug Console - Fixed App</h1>
+    <button onclick="clearConsole()">Clear Console</button>
+    <button onclick="checkApp()">Check App State</button>
+    <button onclick="forceInit()">Force Initialize</button>
+    
+    <div class="console" id="console"></div>
+    
+    <iframe id="app-frame" src="/index-fully-fixed.html"></iframe>
+    
+    <script>
+        const consoleDiv = document.getElementById('console');
+        const iframe = document.getElementById('app-frame');
+        let logCount = 0;
+        
+        function log(msg, type = 'info') {
+            logCount++;
+            const div = document.createElement('div');
+            div.className = `log ${type}`;
+            div.textContent = `[${logCount}] ${new Date().toLocaleTimeString()} - ${msg}`;
+            consoleDiv.appendChild(div);
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+        }
+        
+        function clearConsole() {
+            consoleDiv.innerHTML = '';
+            logCount = 0;
+            log('Console cleared', 'info');
+        }
+        
+        // Intercept iframe console
+        iframe.onload = function() {
+            const win = iframe.contentWindow;
+            
+            // Capture console methods
+            const originalLog = win.console.log;
+            const originalError = win.console.error;
+            const originalWarn = win.console.warn;
+            
+            win.console.log = function(...args) {
+                log('LOG: ' + args.join(' '), 'info');
+                originalLog.apply(win.console, args);
+            };
+            
+            win.console.error = function(...args) {
+                log('ERROR: ' + args.join(' '), 'error');
+                originalError.apply(win.console, args);
+            };
+            
+            win.console.warn = function(...args) {
+                log('WARN: ' + args.join(' '), 'warn');
+                originalWarn.apply(win.console, args);
+            };
+            
+            // Capture errors
+            win.addEventListener('error', (e) => {
+                log(`ERROR: ${e.message} at ${e.filename}:${e.lineno}:${e.colno}`, 'error');
+            });
+            
+            win.addEventListener('unhandledrejection', (e) => {
+                log(`UNHANDLED REJECTION: ${e.reason}`, 'error');
+            });
+            
+            log('Console capture initialized', 'success');
+            
+            // Check initial state
+            setTimeout(() => {
+                checkApp();
+            }, 1000);
+        };
+        
+        function checkApp() {
+            try {
+                const win = iframe.contentWindow;
+                
+                // Check loading indicator
+                const loader = win.document.getElementById('loading-indicator');
+                if (loader) {
+                    const display = win.getComputedStyle(loader).display;
+                    log(`Loading indicator display: ${display}`, display === 'none' ? 'success' : 'warn');
+                }
+                
+                // Check Three.js
+                if (win.THREE) {
+                    log('THREE.js loaded: YES', 'success');
+                    log(`THREE.js version: ${win.THREE.REVISION}`, 'info');
+                } else {
+                    log('THREE.js loaded: NO', 'error');
+                }
+                
+                // Check OrbitControls
+                if (win.THREE && win.THREE.OrbitControls) {
+                    log('OrbitControls loaded: YES', 'success');
+                } else {
+                    log('OrbitControls loaded: NO', 'error');
+                }
+                
+                // Check components
+                const components = ['APIClient', 'EventBus', 'PerformanceMonitor', 'VideoVisualization3D', 'ControlPanel', 'DetailModal', 'VideoPlayer'];
+                components.forEach(comp => {
+                    if (win[comp]) {
+                        log(`${comp}: LOADED`, 'success');
+                    } else {
+                        log(`${comp}: NOT FOUND`, 'error');
+                    }
+                });
+                
+                // Check app instance
+                if (win.videoAnalysisApp) {
+                    log('App instance: EXISTS', 'success');
+                    const state = win.videoAnalysisApp.appState;
+                    log(`App state - isLoading: ${state.isLoading}`, state.isLoading ? 'warn' : 'info');
+                    log(`App state - totalVideos: ${state.totalVideos}`, 'info');
+                    log(`App state - visiblePoints: ${state.visiblePoints.length}`, 'info');
+                } else {
+                    log('App instance: NOT FOUND', 'error');
+                }
+                
+                // Check for canvas
+                const canvas = win.document.querySelector('canvas');
+                if (canvas) {
+                    log(`Canvas found: ${canvas.width}x${canvas.height}`, 'success');
+                } else {
+                    log('Canvas: NOT FOUND', 'error');
+                }
+                
+            } catch (e) {
+                log(`Check error: ${e.message}`, 'error');
+            }
+        }
+        
+        function forceInit() {
+            try {
+                const win = iframe.contentWindow;
+                
+                log('Attempting force initialization...', 'warn');
+                
+                // Try to hide loading screen manually
+                const loader = win.document.getElementById('loading-indicator');
+                if (loader) {
+                    loader.style.display = 'none';
+                    log('Manually hid loading screen', 'success');
+                }
+                
+                // Check if we can create app instance
+                if (!win.videoAnalysisApp && win.VideoAnalysisApp) {
+                    win.videoAnalysisApp = new win.VideoAnalysisApp();
+                    log('Created app instance manually', 'success');
+                } else if (win.videoAnalysisApp) {
+                    log('App instance already exists', 'info');
+                } else {
+                    log('VideoAnalysisApp class not found', 'error');
+                }
+                
+            } catch (e) {
+                log(`Force init error: ${e.message}`, 'error');
+            }
+        }
+    </script>
+</body>
+</html>

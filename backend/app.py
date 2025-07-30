@@ -46,7 +46,7 @@ cluster_info = None
 anomaly_detector = None
 openai_client = None
 
-def initialize_app():
+def bootstrap_initialize_app():
     """Initialize the application with data and models"""
     global vector_store, video_data, coordinates_3d, cluster_info, anomaly_detector, openai_client
     
@@ -147,6 +147,18 @@ def paginate_results(data: List, page: int, per_page: int) -> Dict:
         }
     }
 
+# Serve frontend
+@app.route('/')
+def serve_frontend():
+    """Serve the main frontend application"""
+    return send_file('../frontend/index.html')
+
+@app.route('/<path:path>')
+def serve_static(path):
+    """Serve static frontend files"""
+    frontend_path = os.path.join(os.path.dirname(__file__), '..', 'frontend')
+    return send_file(os.path.join(frontend_path, path))
+
 # Health check endpoint
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -188,14 +200,17 @@ def health_check():
 # Video endpoints
 @app.route('/api/videos', methods=['GET'])
 @require_data
-@cache.cached(timeout=config.cache.video_cache_timeout)
 def get_videos():
     """Get paginated list of videos with 3D coordinates"""
     try:
         # Parse query parameters
         page = request.args.get('page', 1, type=int)
-        per_page = min(request.args.get('per_page', config.performance.default_page_size, type=int), 
-                      config.performance.max_page_size)
+        requested_per_page = request.args.get('per_page', config.performance.default_page_size, type=int)
+        per_page = min(requested_per_page, config.performance.max_page_size)
+        
+        # Debug output
+        print(f"DEBUG: requested_per_page={requested_per_page}, per_page={per_page}, max_page_size={config.performance.max_page_size}")
+        
         cluster_id = request.args.get('cluster_id', type=int)
         anomaly_threshold = request.args.get('anomaly_threshold', 0.0, type=float)
         sort_by = request.args.get('sort_by', 'video_id')
@@ -242,6 +257,11 @@ def get_videos():
                 'video_quality': str(row.get('video-quality', 'unknown')),
                 'anomaly_score': float(row.get('anomaly_score', 0)),
                 'cluster_id': int(row.get('cluster_id', -1)),
+                'general_description': str(row.get('general-description', '')) if 'general-description' in row else '',
+                'description_step_by_step': str(row.get('description-step-by-step', '')) if 'description-step-by-step' in row else '',
+                'interpretation': str(row.get('interpretation', '')) if 'interpretation' in row else '',
+                'main_cluster_id': int(row.get('main_cluster_id', -1)) if 'main_cluster_id' in row else None,
+                'sub_cluster_id': int(row.get('sub_cluster_id', -1)) if 'sub_cluster_id' in row else None,
                 'coordinates': {
                     'x': float(row.get('x', 0)),
                     'y': float(row.get('y', 0)),
@@ -321,6 +341,23 @@ def get_video_details(video_id):
         
         # Add cluster information
         cluster_id = video_row.get('cluster_id', -1)
+        video_details['cluster_id'] = int(cluster_id)
+        
+        # Add hierarchical cluster info if available
+        if 'main_cluster_id' in video_row:
+            video_details['main_cluster_id'] = int(video_row.get('main_cluster_id', -1))
+        if 'sub_cluster_id' in video_row:
+            video_details['sub_cluster_id'] = int(video_row.get('sub_cluster_id', -1))
+        
+        # Add more metadata fields
+        video_details['anomaly_score'] = float(video_row.get('anomaly_score', 0))
+        video_details['duration'] = video_row.get('duration', 'Unknown')
+        video_details['event_time'] = video_row.get('event_time', 'Unknown')
+        video_details['scene_description'] = video_row.get('scene_description', 'N/A')
+        video_details['weather_condition'] = video_row.get('weather-conditions', 'Unknown')
+        video_details['view_angle'] = video_row.get('camera-viewpoint-direction', 'Unknown')
+        video_details['road_type'] = video_row.get('road-surface-type', 'Unknown')
+        
         if cluster_info and str(cluster_id) in cluster_info:
             cluster_data = cluster_info[str(cluster_id)]
             video_details['cluster_info'] = {
@@ -468,12 +505,410 @@ def search_videos():
         app.logger.error(f"Search error: {e}")
         return jsonify({'error': 'Search failed', 'details': str(e)}), 500
 
-# Continue with more endpoints...
-# (Due to length constraints, I'll continue in the next part)
+# Video streaming endpoints (external API integration)
+@app.route('/api/videos/<video_id>/stream')
+def stream_video(video_id):
+    """Get signed video streaming URL from external API"""
+    try:
+        # Get video info
+        video = video_data[video_data['video_id'] == video_id]
+        if video.empty:
+            return jsonify({'error': 'Video not found'}), 404
+        
+        # In a real implementation, this would call an external video service API
+        # For now, we'll return a placeholder indicating video unavailable
+        return jsonify({
+            'error': 'Video streaming service unavailable',
+            'message': 'Video playback requires external streaming service'
+        }), 503
+        
+    except Exception as e:
+        logging.error(f"Video streaming error: {str(e)}")
+        return jsonify({'error': 'Failed to get video stream'}), 500
+
+@app.route('/api/videos/<video_id>/thumbnail')
+def get_video_thumbnail(video_id):
+    """Get video thumbnail from external API"""
+    try:
+        # Get video info
+        video = video_data[video_data['video_id'] == video_id]
+        if video.empty:
+            return jsonify({'error': 'Video not found'}), 404
+        
+        # Return placeholder indicating thumbnail unavailable
+        return jsonify({
+            'error': 'Thumbnail service unavailable',
+            'message': 'Thumbnail requires external service',
+            'placeholder': True
+        }), 503
+        
+    except Exception as e:
+        logging.error(f"Thumbnail error: {str(e)}")
+        return jsonify({'error': 'Failed to get thumbnail'}), 500
+
+@app.route('/api/videos/<video_id>/download')
+def download_video(video_id):
+    """Get video download URL from external API"""
+    try:
+        # Get video info
+        video = video_data[video_data['video_id'] == video_id]
+        if video.empty:
+            return jsonify({'error': 'Video not found'}), 404
+        
+        return jsonify({
+            'error': 'Download service unavailable',
+            'message': 'Video download requires external service'
+        }), 503
+        
+    except Exception as e:
+        logging.error(f"Video download error: {str(e)}")
+        return jsonify({'error': 'Failed to get download URL'}), 500
+
+# Filter endpoint
+@app.route('/api/videos/filter', methods=['POST'])
+@require_data
+def filter_videos():
+    """Filter videos based on metadata"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Filter criteria required'}), 400
+        
+        # Start with all videos
+        filtered_data = video_data.copy()
+        
+        # Apply filters
+        for field, values in data.items():
+            if isinstance(values, list) and values:
+                # Convert all values to strings for comparison
+                values = [str(v) for v in values]
+                mask = filtered_data[field].astype(str).isin(values)
+                filtered_data = filtered_data[mask]
+        
+        # Format results
+        results = []
+        for _, row in filtered_data.iterrows():
+            video_item = format_video_item(row)
+            results.append(video_item)
+        
+        return jsonify({
+            'videos': results,
+            'filter_stats': {
+                'total_videos': len(video_data),
+                'filtered_count': len(results),
+                'applied_filters': data
+            }
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"Filter error: {e}")
+        return jsonify({'error': 'Filter failed', 'details': str(e)}), 500
+
+# Clusters endpoint
+@app.route('/api/clusters')
+@require_data
+def get_clusters():
+    """Get cluster information"""
+    try:
+        include_stats = request.args.get('include_stats', 'false').lower() == 'true'
+        
+        if not cluster_info:
+            return jsonify({'clusters': [], 'message': 'No cluster information available'}), 200
+        
+        clusters = []
+        
+        # Handle hierarchical cluster info structure
+        if 'main_clusters' in cluster_info and 'sub_clusters' in cluster_info:
+            # New hierarchical structure
+            for cluster_id, cluster_data in cluster_info.get('main_clusters', {}).items():
+                cluster_item = {
+                    'cluster_id': int(cluster_id) if cluster_id != '-1' else -1,
+                    'label': cluster_data.get('label', f'Cluster {cluster_id}'),
+                    'size': cluster_data.get('size', 0),
+                    'keywords': cluster_data.get('keywords', []),
+                    'centroid': cluster_data.get('centroid', [0, 0, 0]),
+                    'bounding_box': cluster_data.get('bounding_box', None)
+                }
+                
+                if include_stats:
+                    # Add cluster statistics
+                    cluster_videos = video_data[video_data['cluster_id'] == int(cluster_id)]
+                    if not cluster_videos.empty:
+                        cluster_item['stats'] = {
+                            'avg_anomaly_score': float(cluster_videos['anomaly_score'].mean()),
+                            'main_events': cluster_videos['main-event'].value_counts().to_dict(),
+                            'locations': cluster_videos['location'].value_counts().to_dict()
+                        }
+                        
+                        # Add centroid coordinates if available
+                        if coordinates_3d is not None:
+                            cluster_indices = cluster_videos.index
+                            valid_indices = [i for i in cluster_indices if i < len(coordinates_3d)]
+                            if valid_indices:
+                                cluster_coords = coordinates_3d[valid_indices]
+                                centroid = np.mean(cluster_coords, axis=0)
+                                cluster_item['centroid'] = {
+                                    'x': float(centroid[0]),
+                                    'y': float(centroid[1]),
+                                    'z': float(centroid[2])
+                                }
+                
+                clusters.append(cluster_item)
+        else:
+            # Old structure fallback
+            for cluster_id, cluster_data in cluster_info.items():
+                cluster_item = {
+                    'cluster_id': int(cluster_id) if cluster_id != '-1' else -1,
+                    'label': cluster_data.get('label', f'Cluster {cluster_id}'),
+                    'size': cluster_data.get('size', 0),
+                    'keywords': cluster_data.get('keywords', []),
+                    'centroid': cluster_data.get('centroid', [0, 0, 0]),
+                    'bounding_box': cluster_data.get('bounding_box', None)
+                }
+                clusters.append(cluster_item)
+        
+        return jsonify({
+            'clusters': clusters,
+            'total_clusters': len(clusters)
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"Clusters error: {e}")
+        return jsonify({'error': 'Failed to get clusters', 'details': str(e)}), 500
+
+# Individual cluster detail endpoint
+@app.route('/api/clusters/<int:cluster_id>')
+@require_data
+def get_cluster_detail(cluster_id):
+    """Get detailed information for a specific cluster including word cloud"""
+    try:
+        # Convert cluster_id to string for lookup
+        cluster_key = str(cluster_id)
+        
+        # Check if type parameter is specified
+        cluster_type = request.args.get('type', None)
+        
+        # Handle hierarchical structure
+        if 'main_clusters' in cluster_info and 'sub_clusters' in cluster_info:
+            if cluster_type == 'main':
+                # Only look in main clusters
+                cluster_data = cluster_info.get('main_clusters', {}).get(cluster_key)
+            elif cluster_type == 'sub':
+                # Only look in sub clusters
+                cluster_data = cluster_info.get('sub_clusters', {}).get(cluster_key)
+            else:
+                # Default behavior - for regular cluster IDs (0-9), check regular clusters first
+                # These are the visible clusters in the UI
+                if cluster_key in cluster_info:
+                    cluster_data = cluster_info[cluster_key]
+                else:
+                    # Then check hierarchical structure
+                    cluster_data = cluster_info.get('main_clusters', {}).get(cluster_key)
+                    if not cluster_data:
+                        cluster_data = cluster_info.get('sub_clusters', {}).get(cluster_key)
+            
+            if not cluster_data:
+                return jsonify({'error': 'Cluster not found'}), 404
+        else:
+            # Old structure
+            if cluster_key not in cluster_info:
+                return jsonify({'error': 'Cluster not found'}), 404
+            cluster_data = cluster_info[cluster_key]
+        
+        # Get videos in this cluster
+        cluster_videos = video_data[video_data['cluster_id'] == cluster_id]
+        
+        # Build detailed response
+        cluster_detail = {
+            'cluster_id': cluster_id,
+            'label': cluster_data.get('label', f'Cluster {cluster_id}'),
+            'size': cluster_data.get('size', len(cluster_videos)),
+            'keywords': cluster_data.get('keywords', []),
+            'top_keywords': cluster_data.get('top_keywords', {}),
+            'wordcloud_base64': cluster_data.get('wordcloud_base64', ''),
+            'centroid': cluster_data.get('centroid', [0, 0, 0]),
+            'bounding_box': cluster_data.get('bounding_box', {
+                'min': [0, 0, 0],
+                'max': [0, 0, 0]
+            }),
+            'spatial_spread': cluster_data.get('spatial_spread', 0),
+            'statistics': cluster_data.get('statistics', {})
+        }
+        
+        # Add sample videos with more details
+        sample_videos = []
+        for _, video in cluster_videos.head(10).iterrows():
+            sample_videos.append({
+                'video_id': str(video.get('video_id', '')),
+                'title': str(video.get('video-title', '')),
+                'main_event': str(video.get('main-event', '')),
+                'location': str(video.get('location', '')),
+                'anomaly_score': float(video.get('anomaly_score', 0)),
+                'coordinates': {
+                    'x': float(video.get('x', 0)),
+                    'y': float(video.get('y', 0)),
+                    'z': float(video.get('z', 0))
+                }
+            })
+        
+        cluster_detail['sample_videos'] = sample_videos
+        
+        # Add metadata distribution
+        if not cluster_videos.empty:
+            cluster_detail['metadata_distribution'] = {
+                'main_events': cluster_videos['main-event'].value_counts().to_dict(),
+                'locations': cluster_videos['location'].value_counts().to_dict(),
+                'zones': cluster_videos['zone'].value_counts().to_dict() if 'zone' in cluster_videos.columns else {},
+                'weather_conditions': cluster_videos['weather-conditions'].value_counts().to_dict() if 'weather-conditions' in cluster_videos.columns else {}
+            }
+        
+        return jsonify(cluster_detail), 200
+        
+    except Exception as e:
+        app.logger.error(f"Cluster detail error: {e}")
+        return jsonify({'error': 'Failed to get cluster details', 'details': str(e)}), 500
+
+# Anomalies endpoint
+@app.route('/api/anomalies')
+@require_data
+def get_anomalies():
+    """Get anomalous videos"""
+    try:
+        threshold = float(request.args.get('threshold', 0.5))
+        limit = min(int(request.args.get('limit', 100)), 1000)
+        
+        # Filter videos by anomaly score
+        anomalous_videos = video_data[video_data['anomaly_score'] > threshold]
+        anomalous_videos = anomalous_videos.nlargest(limit, 'anomaly_score')
+        
+        results = []
+        for _, row in anomalous_videos.iterrows():
+            video_item = format_video_item(row)
+            results.append(video_item)
+        
+        return jsonify({
+            'videos': results,
+            'anomaly_stats': {
+                'threshold': threshold,
+                'total_anomalies': len(results),
+                'avg_score': float(anomalous_videos['anomaly_score'].mean()) if not anomalous_videos.empty else 0
+            }
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"Anomalies error: {e}")
+        return jsonify({'error': 'Failed to get anomalies', 'details': str(e)}), 500
+
+# Metadata filters endpoint
+@app.route('/api/filters/metadata')
+@require_data
+def get_metadata_filters():
+    """Get available filter options"""
+    try:
+        filter_fields = [
+            'main-event', 'location', 'zone', 'weather-conditions', 
+            'light-conditions', 'video-quality', 'type-of-vehicle-recording'
+        ]
+        
+        available_filters = {}
+        for field in filter_fields:
+            if field in video_data.columns:
+                value_counts = video_data[field].value_counts()
+                available_filters[field] = [
+                    {
+                        'value': str(value),
+                        'label': str(value).replace('-', ' ').title(),
+                        'count': int(count)
+                    }
+                    for value, count in value_counts.items()
+                    if pd.notna(value) and str(value).lower() not in ['nan', 'none', '']
+                ]
+        
+        return jsonify(available_filters), 200
+        
+    except Exception as e:
+        app.logger.error(f"Metadata filters error: {e}")
+        return jsonify({'error': 'Failed to get metadata filters', 'details': str(e)}), 500
+
+def format_video_item(row):
+    """Format video row for API response"""
+    video_item = {
+        'video_id': str(row['video_id']),
+        'title': str(row.get('video-title', '')),
+        'main_event': str(row.get('main-event', 'unknown')),
+        'location': str(row.get('location', 'unknown')),
+        'anomaly_score': float(row.get('anomaly_score', 0)),
+        'cluster_id': int(row.get('cluster_id', -1))
+    }
+    
+    # Add coordinates if available
+    row_index = row.name
+    if coordinates_3d is not None and row_index < len(coordinates_3d):
+        coords = coordinates_3d[row_index]
+        video_item['coordinates'] = {
+            'x': float(coords[0]),
+            'y': float(coords[1]),
+            'z': float(coords[2])
+        }
+    
+    return video_item
+
+
+def bootstrap_initialize_app():
+    """Bootstrap initialization with minimal dependencies"""
+    global video_data, coordinates_3d, cluster_info
+    
+    try:
+        print("📊 Loading bootstrap data...")
+        
+        # Load video data - try hierarchical first, fallback to regular
+        csv_path = 'data/df_gemini_hierarchical.csv'
+        if not os.path.exists(csv_path):
+            csv_path = 'data/df_gemini.csv'
+        
+        if os.path.exists(csv_path):
+            video_data = pd.read_csv(csv_path)
+            print(f"✅ Loaded {len(video_data)} videos")
+            
+            # Add coordinates from CSV
+            if 'x' in video_data.columns:
+                coordinates_3d = video_data[['x', 'y', 'z']].values
+                print(f"✅ Loaded 3D coordinates for {len(coordinates_3d)} videos")
+        
+        # Load cluster info - combine both regular and hierarchical
+        cluster_info = {}
+        
+        # First load regular cluster info (contains cluster 0-9 details)
+        regular_cluster_path = 'data/cluster_info.json'
+        if os.path.exists(regular_cluster_path):
+            with open(regular_cluster_path, 'r') as f:
+                regular_clusters = json.load(f)
+                cluster_info.update(regular_clusters)
+                print(f"✅ Loaded {len(regular_clusters)} regular clusters")
+        
+        # Then load hierarchical cluster info (contains main/sub cluster hierarchy)
+        hier_cluster_path = 'data/hierarchical_cluster_info.json'
+        if os.path.exists(hier_cluster_path):
+            with open(hier_cluster_path, 'r') as f:
+                hier_clusters = json.load(f)
+                # Add hierarchical structure without overwriting regular clusters
+                cluster_info['main_clusters'] = hier_clusters.get('main_clusters', {})
+                cluster_info['sub_clusters'] = hier_clusters.get('sub_clusters', {})
+                cluster_info['hierarchy'] = hier_clusters.get('hierarchy', {})
+                print(f"✅ Loaded hierarchical cluster info")
+        
+        print("🎉 Bootstrap initialization complete!")
+        
+    except Exception as e:
+        print(f"❌ Bootstrap initialization failed: {e}")
+        # Set minimal defaults
+        video_data = pd.DataFrame()
+        coordinates_3d = None
+        cluster_info = {}
 
 if __name__ == '__main__':
     # Initialize the application
-    initialize_app()
+    bootstrap_initialize_app()
     
     # Run the Flask app
     app.run(

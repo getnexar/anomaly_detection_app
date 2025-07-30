@@ -25,8 +25,8 @@ class IntelligentVideoClustering:
             metric='euclidean',
             cluster_selection_method='eom',  # Excess of Mass
             algorithm='best',
-            leaf_size=40,
-            n_jobs=config.clustering.n_jobs
+            leaf_size=40
+            # Note: n_jobs parameter removed due to compatibility issues with some HDBSCAN versions
         )
         
         self.cluster_labels_ = None

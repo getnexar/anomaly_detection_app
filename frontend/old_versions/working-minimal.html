@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Working Minimal App</title>
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/components.css">
+    <style>
+        .simple-viz {
+            width: 100%;
+            height: 600px;
+            background: #1a1a1a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+        }
+        .video-list {
+            padding: 20px;
+            background: #2a2a2a;
+            color: white;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .video-item {
+            padding: 5px;
+            margin: 2px 0;
+            background: #3a3a3a;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <header class="app-header">
+            <h1>Working Minimal Video Analysis</h1>
+        </header>
+        
+        <main class="app-main">
+            <div class="simple-viz" id="viz">
+                <canvas id="simple-canvas"></canvas>
+            </div>
+            
+            <div class="video-list" id="video-list">
+                Loading videos...
+            </div>
+        </main>
+        
+        <div id="loading-indicator" class="loading-overlay">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Loading video data...</div>
+        </div>
+    </div>
+
+    <script type="module">
+        console.log('Starting minimal app...');
+        
+        // Simple loading functions
+        function showLoading(show, message = 'Loading...') {
+            const loader = document.getElementById('loading-indicator');
+            if (loader) {
+                loader.style.display = show ? 'flex' : 'none';
+                const text = loader.querySelector('.loading-text');
+                if (text) text.textContent = message;
+            }
+        }
+        
+        // Simple API client
+        async function fetchVideos() {
+            const response = await fetch('/api/videos?page=1&per_page=10');
+            return response.json();
+        }
+        
+        // Simple Three.js visualization
+        async function createSimpleViz(videos) {
+            const THREE = await import('https://unpkg.com/three@0.150.0/build/three.module.js');
+            
+            const canvas = document.getElementById('simple-canvas');
+            const container = document.getElementById('viz');
+            
+            // Scene setup
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a1a);
+            
+            // Camera
+            const camera = new THREE.PerspectiveCamera(
+                75, 
+                container.clientWidth / container.clientHeight, 
+                0.1, 
+                1000
+            );
+            camera.position.z = 50;
+            
+            // Renderer
+            const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            
+            // Add some points for videos
+            const geometry = new THREE.BufferGeometry();
+            const positions = [];
+            
+            videos.forEach((video, i) => {
+                positions.push(
+                    (Math.random() - 0.5) * 40,
+                    (Math.random() - 0.5) * 40,
+                    (Math.random() - 0.5) * 40
+                );
+            });
+            
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            
+            const material = new THREE.PointsMaterial({ 
+                color: 0x00ff00, 
+                size: 2,
+                sizeAttenuation: true 
+            });
+            
+            const points = new THREE.Points(geometry, material);
+            scene.add(points);
+            
+            // Animate
+            function animate() {
+                requestAnimationFrame(animate);
+                points.rotation.x += 0.001;
+                points.rotation.y += 0.002;
+                renderer.render(scene, camera);
+            }
+            animate();
+            
+            // Handle resize
+            window.addEventListener('resize', () => {
+                camera.aspect = container.clientWidth / container.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container.clientWidth, container.clientHeight);
+            });
+        }
+        
+        // Main initialization
+        async function init() {
+            try {
+                console.log('Step 1: Showing loading...');
+                showLoading(true, 'Fetching videos...');
+                
+                console.log('Step 2: Fetching videos...');
+                const data = await fetchVideos();
+                console.log(`Fetched ${data.videos.length} videos`);
+                
+                console.log('Step 3: Updating video list...');
+                const listEl = document.getElementById('video-list');
+                listEl.innerHTML = `<h3>Found ${data.videos.length} videos:</h3>`;
+                data.videos.slice(0, 10).forEach(video => {
+                    const div = document.createElement('div');
+                    div.className = 'video-item';
+                    div.textContent = `${video.video_id} - ${video.title || 'Untitled'}`;
+                    listEl.appendChild(div);
+                });
+                
+                console.log('Step 4: Creating visualization...');
+                await createSimpleViz(data.videos);
+                
+                console.log('Step 5: Hiding loading...');
+                showLoading(false);
+                
+                console.log('✅ App initialized successfully!');
+                
+            } catch (error) {
+                console.error('Failed to initialize:', error);
+                showLoading(false);
+                document.getElementById('viz').innerHTML = `<div style="color: red; padding: 20px;">Error: ${error.message}</div>`;
+            }
+        }
+        
+        // Start when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    </script>
+</body>
+</html>

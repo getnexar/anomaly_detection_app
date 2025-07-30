@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Test</title>
+</head>
+<body>
+    <h1>API Test Page</h1>
+    <div id="results"></div>
+    
+    <script>
+        const resultsDiv = document.getElementById('results');
+        
+        async function testAPI() {
+            // Test 1: Health endpoint
+            try {
+                resultsDiv.innerHTML += '<h2>Testing /api/health...</h2>';
+                const healthResponse = await fetch('/api/health');
+                const healthData = await healthResponse.json();
+                resultsDiv.innerHTML += '<pre>' + JSON.stringify(healthData, null, 2) + '</pre>';
+            } catch (error) {
+                resultsDiv.innerHTML += '<p style="color: red;">Health Error: ' + error + '</p>';
+            }
+            
+            // Test 2: Videos endpoint
+            try {
+                resultsDiv.innerHTML += '<h2>Testing /api/videos...</h2>';
+                const videosResponse = await fetch('/api/videos?page=1&per_page=5');
+                const videosData = await videosResponse.json();
+                resultsDiv.innerHTML += '<pre>' + JSON.stringify(videosData, null, 2) + '</pre>';
+            } catch (error) {
+                resultsDiv.innerHTML += '<p style="color: red;">Videos Error: ' + error + '</p>';
+            }
+            
+            // Test 3: Clusters endpoint
+            try {
+                resultsDiv.innerHTML += '<h2>Testing /api/clusters...</h2>';
+                const clustersResponse = await fetch('/api/clusters');
+                const clustersData = await clustersResponse.json();
+                resultsDiv.innerHTML += '<pre>' + JSON.stringify(clustersData, null, 2) + '</pre>';
+            } catch (error) {
+                resultsDiv.innerHTML += '<p style="color: red;">Clusters Error: ' + error + '</p>';
+            }
+        }
+        
+        // Run tests on page load
+        testAPI();
+    </script>
+</body>
+</html>

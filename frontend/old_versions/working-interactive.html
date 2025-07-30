@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Analysis Dashboard - Interactive</title>
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background: #121212;
+            color: #fff;
+            overflow: hidden;
+        }
+        
+        #loading-indicator {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(18, 18, 18, 0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        
+        .loading-content {
+            text-align: center;
+        }
+        
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(66, 135, 245, 0.3);
+            border-top: 4px solid #4287f5;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            color: #fff;
+            font-size: 18px;
+            font-weight: 300;
+        }
+        
+        #three-canvas {
+            width: 100%;
+            height: 100vh;
+        }
+        
+        .app-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: rgba(26, 26, 26, 0.9);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+        
+        .controls-info {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 4px;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+        
+        .error-message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #f44336;
+            padding: 20px;
+            border-radius: 4px;
+            display: none;
+        }
+        
+        #hover-info {
+            position: fixed;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            display: none;
+            z-index: 1001;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading-indicator">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Loading video data...</div>
+        </div>
+    </div>
+    
+    <div class="app-header">
+        <h1>Video Analysis Dashboard</h1>
+        <div style="margin-left: auto;">
+            <span id="status">Initializing...</span>
+        </div>
+    </div>
+    
+    <div id="three-canvas"></div>
+    
+    <div class="controls-info">
+        <strong>Controls:</strong><br>
+        • Left Mouse: Rotate<br>
+        • Right Mouse: Pan<br>
+        • Scroll: Zoom<br>
+        • Click: Select point
+    </div>
+    
+    <div id="hover-info"></div>
+    <div id="error-message" class="error-message"></div>
+
+    <!-- Load Three.js and OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // OrbitControls implementation (inline to ensure it works)
+        THREE.OrbitControls = function ( object, domElement ) {
+            this.object = object;
+            this.domElement = ( domElement !== undefined ) ? domElement : document;
+            this.enabled = true;
+            this.target = new THREE.Vector3();
+            this.minDistance = 0;
+            this.maxDistance = Infinity;
+            this.minZoom = 0;
+            this.maxZoom = Infinity;
+            this.enableDamping = false;
+            this.dampingFactor = 0.25;
+            this.enableZoom = true;
+            this.zoomSpeed = 1.0;
+            this.enableRotate = true;
+            this.rotateSpeed = 1.0;
+            this.enablePan = true;
+            this.panSpeed = 1.0;
+            this.screenSpacePanning = false;
+            this.keyPanSpeed = 7.0;
+            this.autoRotate = false;
+            this.autoRotateSpeed = 2.0;
+            
+            var scope = this;
+            var EPS = 0.000001;
+            var rotateStart = new THREE.Vector2();
+            var rotateEnd = new THREE.Vector2();
+            var rotateDelta = new THREE.Vector2();
+            var panStart = new THREE.Vector2();
+            var panEnd = new THREE.Vector2();
+            var panDelta = new THREE.Vector2();
+            var dollyStart = new THREE.Vector2();
+            var dollyEnd = new THREE.Vector2();
+            var dollyDelta = new THREE.Vector2();
+            var theta;
+            var phi;
+            var phiDelta = 0;
+            var thetaDelta = 0;
+            var scale = 1;
+            var panOffset = new THREE.Vector3();
+            var zoomChanged = false;
+            var STATE = { NONE: -1, ROTATE: 0, DOLLY: 1, PAN: 2 };
+            var state = STATE.NONE;
+            
+            this.update = function () {
+                var offset = new THREE.Vector3();
+                var quat = new THREE.Quaternion().setFromUnitVectors( object.up, new THREE.Vector3( 0, 1, 0 ) );
+                var quatInverse = quat.clone().invert();
+                var lastPosition = new THREE.Vector3();
+                var lastQuaternion = new THREE.Quaternion();
+                
+                return function update() {
+                    var position = scope.object.position;
+                    offset.copy( position ).sub( scope.target );
+                    offset.applyQuaternion( quat );
+                    theta = Math.atan2( offset.x, offset.z );
+                    phi = Math.atan2( Math.sqrt( offset.x * offset.x + offset.z * offset.z ), offset.y );
+                    theta += thetaDelta;
+                    phi += phiDelta;
+                    phi = Math.max( EPS, Math.min( Math.PI - EPS, phi ) );
+                    var radius = offset.length() * scale;
+                    radius = Math.max( scope.minDistance, Math.min( scope.maxDistance, radius ) );
+                    scope.target.add( panOffset );
+                    offset.x = radius * Math.sin( phi ) * Math.sin( theta );
+                    offset.y = radius * Math.cos( phi );
+                    offset.z = radius * Math.sin( phi ) * Math.cos( theta );
+                    offset.applyQuaternion( quatInverse );
+                    position.copy( scope.target ).add( offset );
+                    scope.object.lookAt( scope.target );
+                    
+                    if ( scope.enableDamping === true ) {
+                        thetaDelta *= ( 1 - scope.dampingFactor );
+                        phiDelta *= ( 1 - scope.dampingFactor );
+                        panOffset.multiplyScalar( 1 - scope.dampingFactor );
+                    } else {
+                        thetaDelta = 0;
+                        phiDelta = 0;
+                        panOffset.set( 0, 0, 0 );
+                    }
+                    
+                    scale = 1;
+                    
+                    if ( zoomChanged || lastPosition.distanceToSquared( scope.object.position ) > EPS || 8 * ( 1 - lastQuaternion.dot( scope.object.quaternion ) ) > EPS ) {
+                        lastPosition.copy( scope.object.position );
+                        lastQuaternion.copy( scope.object.quaternion );
+                        zoomChanged = false;
+                        return true;
+                    }
+                    return false;
+                };
+            }();
+            
+            function onMouseDown( event ) {
+                if ( scope.enabled === false ) return;
+                event.preventDefault();
+                
+                if ( event.button === 0 ) {
+                    state = STATE.ROTATE;
+                    rotateStart.set( event.clientX, event.clientY );
+                } else if ( event.button === 1 ) {
+                    state = STATE.DOLLY;
+                    dollyStart.set( event.clientX, event.clientY );
+                } else if ( event.button === 2 ) {
+                    state = STATE.PAN;
+                    panStart.set( event.clientX, event.clientY );
+                }
+                
+                document.addEventListener( 'mousemove', onMouseMove, false );
+                document.addEventListener( 'mouseup', onMouseUp, false );
+            }
+            
+            function onMouseMove( event ) {
+                if ( scope.enabled === false ) return;
+                event.preventDefault();
+                
+                if ( state === STATE.ROTATE ) {
+                    rotateEnd.set( event.clientX, event.clientY );
+                    rotateDelta.subVectors( rotateEnd, rotateStart ).multiplyScalar( scope.rotateSpeed );
+                    thetaDelta -= 2 * Math.PI * rotateDelta.x / scope.domElement.clientHeight;
+                    phiDelta -= 2 * Math.PI * rotateDelta.y / scope.domElement.clientHeight;
+                    rotateStart.copy( rotateEnd );
+                    scope.update();
+                } else if ( state === STATE.DOLLY ) {
+                    dollyEnd.set( event.clientX, event.clientY );
+                    dollyDelta.subVectors( dollyEnd, dollyStart );
+                    if ( dollyDelta.y > 0 ) {
+                        scale /= Math.pow( 0.95, scope.zoomSpeed );
+                    } else if ( dollyDelta.y < 0 ) {
+                        scale *= Math.pow( 0.95, scope.zoomSpeed );
+                    }
+                    dollyStart.copy( dollyEnd );
+                    scope.update();
+                } else if ( state === STATE.PAN ) {
+                    panEnd.set( event.clientX, event.clientY );
+                    panDelta.subVectors( panEnd, panStart ).multiplyScalar( scope.panSpeed );
+                    var element = scope.domElement;
+                    var targetDistance = scope.object.position.distanceTo( scope.target );
+                    targetDistance *= Math.tan( ( scope.object.fov / 2 ) * Math.PI / 180.0 );
+                    panOffset.x += 2 * panDelta.x * targetDistance / element.clientHeight;
+                    panOffset.y += 2 * panDelta.y * targetDistance / element.clientHeight;
+                    panStart.copy( panEnd );
+                    scope.update();
+                }
+            }
+            
+            function onMouseUp() {
+                if ( scope.enabled === false ) return;
+                document.removeEventListener( 'mousemove', onMouseMove, false );
+                document.removeEventListener( 'mouseup', onMouseUp, false );
+                state = STATE.NONE;
+            }
+            
+            function onMouseWheel( event ) {
+                if ( scope.enabled === false || scope.enableZoom === false || ( state !== STATE.NONE ) ) return;
+                event.preventDefault();
+                event.stopPropagation();
+                
+                if ( event.deltaY < 0 ) {
+                    scale /= Math.pow( 0.95, scope.zoomSpeed );
+                } else if ( event.deltaY > 0 ) {
+                    scale *= Math.pow( 0.95, scope.zoomSpeed );
+                }
+                
+                scope.update();
+            }
+            
+            this.domElement.addEventListener( 'contextmenu', function ( event ) { event.preventDefault(); }, false );
+            this.domElement.addEventListener( 'mousedown', onMouseDown, false );
+            this.domElement.addEventListener( 'wheel', onMouseWheel, false );
+            
+            this.update();
+        };
+    </script>
+    
+    <!-- Main application -->
+    <script>
+        console.log('Starting application...');
+        
+        // Check Three.js
+        if (typeof THREE === 'undefined') {
+            console.error('Three.js not loaded!');
+            document.getElementById('error-message').style.display = 'block';
+            document.getElementById('error-message').textContent = 'Three.js failed to load';
+        } else {
+            console.log('Three.js loaded:', THREE.REVISION);
+        }
+        
+        // Simple API client
+        class SimpleAPI {
+            async getVideos() {
+                try {
+                    const response = await fetch('/api/videos?page=1&per_page=500');
+                    const data = await response.json();
+                    return data.videos || [];
+                } catch (error) {
+                    console.error('API Error:', error);
+                    return [];
+                }
+            }
+        }
+        
+        // Interactive 3D visualization
+        class Interactive3D {
+            constructor(container) {
+                this.container = container;
+                this.scene = new THREE.Scene();
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.controls = null;
+                this.raycaster = new THREE.Raycaster();
+                this.mouse = new THREE.Vector2();
+                this.points = null;
+                this.selectedPoint = null;
+                
+                this.init();
+            }
+            
+            init() {
+                // Setup renderer
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(window.devicePixelRatio);
+                this.container.appendChild(this.renderer.domElement);
+                
+                // Setup camera
+                this.camera.position.set(50, 30, 50);
+                this.camera.lookAt(0, 0, 0);
+                
+                // Setup OrbitControls
+                this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+                this.controls.enableDamping = true;
+                this.controls.dampingFactor = 0.05;
+                this.controls.screenSpacePanning = false;
+                this.controls.minDistance = 10;
+                this.controls.maxDistance = 200;
+                console.log('OrbitControls initialized');
+                
+                // Add lights
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                this.scene.add(ambientLight);
+                
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
+                directionalLight.position.set(10, 10, 10);
+                this.scene.add(directionalLight);
+                
+                // Add background
+                this.scene.background = new THREE.Color(0x121212);
+                
+                // Add grid helper
+                const gridHelper = new THREE.GridHelper(100, 10, 0x444444, 0x222222);
+                this.scene.add(gridHelper);
+                
+                // Add axes helper
+                const axesHelper = new THREE.AxesHelper(20);
+                this.scene.add(axesHelper);
+                
+                // Handle resize
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+                
+                // Mouse events
+                this.container.addEventListener('mousemove', (event) => {
+                    this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+                    this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+                    this.onMouseMove(event);
+                });
+                
+                this.container.addEventListener('click', (event) => {
+                    this.onMouseClick(event);
+                });
+            }
+            
+            loadPoints(videos) {
+                console.log(`Loading ${videos.length} points...`);
+                
+                // Remove existing points
+                if (this.points) {
+                    this.scene.remove(this.points);
+                }
+                
+                // Create geometry
+                const geometry = new THREE.BufferGeometry();
+                const positions = new Float32Array(videos.length * 3);
+                const colors = new Float32Array(videos.length * 3);
+                const sizes = new Float32Array(videos.length);
+                
+                // Fill positions and colors
+                videos.forEach((video, i) => {
+                    // Use coordinates if available, otherwise random
+                    if (video.coordinates_3d) {
+                        positions[i * 3] = video.coordinates_3d[0] * 10;
+                        positions[i * 3 + 1] = video.coordinates_3d[1] * 10;
+                        positions[i * 3 + 2] = video.coordinates_3d[2] * 10;
+                    } else {
+                        positions[i * 3] = (Math.random() - 0.5) * 40;
+                        positions[i * 3 + 1] = (Math.random() - 0.5) * 40;
+                        positions[i * 3 + 2] = (Math.random() - 0.5) * 40;
+                    }
+                    
+                    // Color based on anomaly score
+                    const anomaly = video.anomaly_score || 0;
+                    colors[i * 3] = anomaly;
+                    colors[i * 3 + 1] = 1 - anomaly;
+                    colors[i * 3 + 2] = 0.5;
+                    
+                    // Size based on anomaly
+                    sizes[i] = 2 + anomaly * 3;
+                });
+                
+                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+                geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+                
+                // Create material
+                const material = new THREE.PointsMaterial({
+                    size: 3,
+                    vertexColors: true,
+                    sizeAttenuation: true,
+                    alphaTest: 0.5,
+                    transparent: true
+                });
+                
+                // Create points
+                this.points = new THREE.Points(geometry, material);
+                this.scene.add(this.points);
+                
+                // Store video data for interaction
+                this.points.userData.videos = videos;
+                
+                console.log('Points loaded successfully');
+            }
+            
+            onMouseMove(event) {
+                if (!this.points) return;
+                
+                // Update raycaster
+                this.raycaster.setFromCamera(this.mouse, this.camera);
+                const intersects = this.raycaster.intersectObject(this.points);
+                
+                const hoverInfo = document.getElementById('hover-info');
+                
+                if (intersects.length > 0) {
+                    const index = intersects[0].index;
+                    const video = this.points.userData.videos[index];
+                    
+                    // Update hover info
+                    hoverInfo.innerHTML = `
+                        <strong>${video.title || video.video_id}</strong><br>
+                        Event: ${video.main_event || 'Unknown'}<br>
+                        Location: ${video.location || 'Unknown'}<br>
+                        Anomaly: ${(video.anomaly_score * 100).toFixed(1)}%<br>
+                        Cluster: ${video.cluster_id !== undefined ? video.cluster_id : 'N/A'}
+                    `;
+                    hoverInfo.style.display = 'block';
+                    hoverInfo.style.left = event.clientX + 10 + 'px';
+                    hoverInfo.style.top = event.clientY - 10 + 'px';
+                    
+                    // Change cursor
+                    this.container.style.cursor = 'pointer';
+                } else {
+                    hoverInfo.style.display = 'none';
+                    this.container.style.cursor = 'default';
+                }
+            }
+            
+            onMouseClick(event) {
+                if (!this.points) return;
+                
+                // Update raycaster
+                this.raycaster.setFromCamera(this.mouse, this.camera);
+                const intersects = this.raycaster.intersectObject(this.points);
+                
+                if (intersects.length > 0) {
+                    const index = intersects[0].index;
+                    const video = this.points.userData.videos[index];
+                    
+                    console.log('Selected video:', video);
+                    
+                    // Update status
+                    document.getElementById('status').textContent = 
+                        `Selected: ${video.title || video.video_id}`;
+                    
+                    // Highlight selected point
+                    this.highlightPoint(index);
+                }
+            }
+            
+            highlightPoint(index) {
+                // Get colors array
+                const colors = this.points.geometry.attributes.color.array;
+                const videos = this.points.userData.videos;
+                
+                // Reset all colors
+                videos.forEach((video, i) => {
+                    const anomaly = video.anomaly_score || 0;
+                    colors[i * 3] = anomaly;
+                    colors[i * 3 + 1] = 1 - anomaly;
+                    colors[i * 3 + 2] = 0.5;
+                });
+                
+                // Highlight selected
+                colors[index * 3] = 1;
+                colors[index * 3 + 1] = 1;
+                colors[index * 3 + 2] = 0;
+                
+                // Update geometry
+                this.points.geometry.attributes.color.needsUpdate = true;
+            }
+            
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                
+                // Update controls
+                this.controls.update();
+                
+                // Render
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+        
+        // Main app
+        class InteractiveApp {
+            constructor() {
+                this.api = new SimpleAPI();
+                this.visualization = null;
+                this.init();
+            }
+            
+            async init() {
+                console.log('Initializing app...');
+                
+                try {
+                    // Update status
+                    document.getElementById('status').textContent = 'Loading data...';
+                    
+                    // Load videos
+                    const videos = await this.api.getVideos();
+                    console.log(`Loaded ${videos.length} videos`);
+                    
+                    // Update status
+                    document.getElementById('status').textContent = `${videos.length} videos loaded`;
+                    
+                    // Create visualization
+                    const container = document.getElementById('three-canvas');
+                    this.visualization = new Interactive3D(container);
+                    
+                    // Load points
+                    this.visualization.loadPoints(videos);
+                    
+                    // Start animation
+                    this.visualization.animate();
+                    
+                    // Hide loading
+                    document.getElementById('loading-indicator').style.display = 'none';
+                    
+                    console.log('App initialized successfully!');
+                    
+                } catch (error) {
+                    console.error('Failed to initialize:', error);
+                    document.getElementById('status').textContent = 'Error: ' + error.message;
+                    document.getElementById('error-message').style.display = 'block';
+                    document.getElementById('error-message').textContent = error.message;
+                }
+            }
+        }
+        
+        // Start the app when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                window.app = new InteractiveApp();
+            });
+        } else {
+            window.app = new InteractiveApp();
+        }
+    </script>
+</body>
+</html>

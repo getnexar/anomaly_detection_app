@@ -138,17 +138,38 @@ export class APIClient {
         return this.get('/anomalies', params);
     }
     
-    // Video streaming methods
-    getVideoThumbnailUrl(videoId, size = 'medium') {
-        return `${this.baseURL}/videos/${videoId}/thumbnail?size=${size}`;
+    // Video streaming methods (with external API support)
+    async getVideoThumbnailUrl(videoId, size = 'medium') {
+        try {
+            const response = await this.get(`/videos/${videoId}/thumbnail?size=${size}`);
+            return response.thumbnail_url || null;
+        } catch (error) {
+            // External service unavailable, return placeholder
+            console.warn(`Thumbnail unavailable for ${videoId}:`, error.message);
+            return null;
+        }
     }
     
-    getVideoStreamUrl(videoId, quality = 'medium') {
-        return `${this.baseURL}/videos/${videoId}/stream?quality=${quality}`;
+    async getVideoStreamUrl(videoId, quality = 'medium') {
+        try {
+            const response = await this.get(`/videos/${videoId}/stream?quality=${quality}`);
+            return response.stream_url || null;
+        } catch (error) {
+            // External service unavailable
+            console.warn(`Video stream unavailable for ${videoId}:`, error.message);
+            return null;
+        }
     }
     
-    getVideoDownloadUrl(videoId) {
-        return `${this.baseURL}/videos/${videoId}/download`;
+    async getVideoDownloadUrl(videoId) {
+        try {
+            const response = await this.get(`/videos/${videoId}/download`);
+            return response.download_url || null;
+        } catch (error) {
+            // External service unavailable
+            console.warn(`Video download unavailable for ${videoId}:`, error.message);
+            return null;
+        }
     }
     
     // Health check

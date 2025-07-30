@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Analysis Dashboard - Integrated Manual Controls</title>
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/modal.css">
+    
+    <style>
+        /* Additional styles for manual controls */
+        #loading-indicator {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(18, 18, 18, 0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        
+        .loading-content {
+            text-align: center;
+        }
+        
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(66, 135, 245, 0.3);
+            border-top: 4px solid #4287f5;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            color: #fff;
+            font-size: 18px;
+            font-weight: 300;
+        }
+        
+        .controls-info {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 4px;
+            font-size: 12px;
+            line-height: 1.5;
+            z-index: 100;
+        }
+        
+        #hover-info {
+            position: fixed;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            display: none;
+            z-index: 1001;
+            max-width: 300px;
+        }
+        
+        #selected-info {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 4px;
+            font-size: 14px;
+            display: none;
+            width: 250px;
+            z-index: 100;
+        }
+        
+        #three-canvas {
+            cursor: grab;
+        }
+        
+        #three-canvas.dragging {
+            cursor: grabbing;
+        }
+        
+        .error-notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #dc3545;
+            color: white;
+            padding: 16px;
+            border-radius: 4px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            z-index: 5000;
+            max-width: 400px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .error-notification button {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- Loading Indicator -->
+        <div id="loading-indicator">
+            <div class="loading-content">
+                <div class="loading-spinner"></div>
+                <div class="loading-text">Loading video data...</div>
+            </div>
+        </div>
+        
+        <!-- Main 3D Canvas -->
+        <div id="three-canvas" class="three-canvas"></div>
+        
+        <!-- Hover Info -->
+        <div id="hover-info"></div>
+        
+        <!-- Selected Info -->
+        <div id="selected-info"></div>
+        
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-left">
+                <h1 class="app-title">Video Analysis Dashboard</h1>
+                <div class="stats-container">
+                    <span class="stat-item">Videos: <span id="total-videos">0</span></span>
+                    <span class="stat-item">Visible: <span id="visible-videos">0</span></span>
+                    <span class="stat-item">FPS: <span id="fps-counter">0</span></span>
+                </div>
+            </div>
+            <div class="header-right">
+                <span id="status">Initializing...</span>
+            </div>
+        </header>
+        
+        <!-- Controls Info -->
+        <div class="controls-info">
+            <strong>Controls:</strong><br>
+            • Drag: Rotate camera<br>
+            • Scroll: Zoom in/out<br>
+            • Arrow Keys: Move camera<br>
+            • Click: Select point<br>
+            • Hover: View details<br>
+            • R: Reset camera<br>
+            • F: Fit all points<br>
+            • ESC: Close panels
+        </div>
+        
+        <!-- Control Panel (optional) -->
+        <aside id="control-panel" class="control-panel" style="display: none;">
+            <div class="panel-section">
+                <h3 class="section-title">Controls</h3>
+            </div>
+        </aside>
+        
+        <!-- Modals (optional) -->
+        <div id="detail-modal" class="modal" style="display: none;">
+            <div class="modal-backdrop"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Video Details</h2>
+                    <button class="close-btn">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <!-- Content will be dynamically inserted -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- Load utilities and services -->
+    <script src="js/utils/EventBus-simple.js"></script>
+    <script src="js/utils/PerformanceMonitor-simple.js"></script>
+    <script src="js/services/APIClient-simple.js"></script>
+    
+    <!-- Load components with manual controls -->
+    <script src="js/components/VideoVisualization3D-manual.js"></script>
+    
+    <!-- Optional components (only load if they exist) -->
+    <script>
+        // Stub out optional components if they don't exist
+        if (typeof ControlPanel === 'undefined') {
+            window.ControlPanel = class {
+                constructor() {}
+                init() { return Promise.resolve(); }
+                updateFilters() {}
+                updateClusters() {}
+                updateSearchResults() {}
+                clearSearchResults() {}
+            };
+        }
+        
+        if (typeof DetailModal === 'undefined') {
+            window.DetailModal = class {
+                constructor() {}
+                init() { return Promise.resolve(); }
+                show() {}
+                hide() {}
+                updateContent() {}
+                isVisible() { return false; }
+            };
+        }
+        
+        if (typeof VideoPlayer === 'undefined') {
+            window.VideoPlayer = class {
+                constructor() {}
+                init() { return Promise.resolve(); }
+                show() {}
+                hide() {}
+                isVisible() { return false; }
+            };
+        }
+    </script>
+    
+    <!-- Main application with manual controls -->
+    <script src="js/main-manual.js"></script>
+</body>
+</html>

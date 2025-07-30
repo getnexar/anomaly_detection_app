@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Working</title>
+</head>
+<body>
+    <h1>Testing if app loads...</h1>
+    <iframe src="/" width="100%" height="600" style="border: 2px solid black;"></iframe>
+    
+    <script>
+        // Check iframe content after load
+        setTimeout(() => {
+            const iframe = document.querySelector('iframe');
+            try {
+                const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                const loadingText = iframeDoc.querySelector('.loading-message');
+                if (loadingText && loadingText.textContent.includes('Loading video data')) {
+                    document.body.innerHTML += '<h2 style="color: red;">STILL STUCK ON LOADING!</h2>';
+                } else {
+                    document.body.innerHTML += '<h2 style="color: green;">APP LOADED SUCCESSFULLY!</h2>';
+                }
+            } catch (e) {
+                document.body.innerHTML += '<h2 style="color: orange;">Cannot check iframe (CORS)</h2>';
+            }
+        }, 5000);
+    </script>
+</body>
+</html>

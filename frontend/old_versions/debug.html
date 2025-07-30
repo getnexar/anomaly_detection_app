@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Page</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        .log { margin: 5px 0; padding: 5px; background: #f0f0f0; }
+        .error { background: #ffdddd; }
+        .success { background: #ddffdd; }
+        .info { background: #ddddff; }
+    </style>
+</head>
+<body>
+    <h1>Debug: Video Analysis App</h1>
+    <div id="logs"></div>
+    
+    <script type="module">
+        const logsDiv = document.getElementById('logs');
+        let stepCounter = 0;
+        
+        function log(message, type = 'info') {
+            stepCounter++;
+            const div = document.createElement('div');
+            div.className = `log ${type}`;
+            div.textContent = `[${stepCounter}] ${new Date().toISOString().substr(11, 12)} - ${message}`;
+            logsDiv.appendChild(div);
+            console.log(message);
+        }
+        
+        async function debugApp() {
+            log('Starting debug process...');
+            
+            try {
+                // Test 1: Can we import basic modules?
+                log('Testing module imports...');
+                const { EventBus } = await import('./js/utils/EventBus.js');
+                log(' EventBus imported', 'success');
+                
+                const { APIClient } = await import('./js/services/APIClient.js');
+                log(' APIClient imported', 'success');
+                
+                const { PerformanceMonitor } = await import('./js/utils/PerformanceMonitor.js');
+                log(' PerformanceMonitor imported', 'success');
+                
+                // Test 2: Can we import Three.js?
+                log('Testing Three.js import...');
+                try {
+                    const THREE = await import('https://unpkg.com/three@0.150.0/build/three.module.js');
+                    log(' Three.js imported successfully', 'success');
+                } catch (e) {
+                    log(` Three.js import failed: ${e.message}`, 'error');
+                }
+                
+                // Test 3: Can we import VideoVisualization3D?
+                log('Testing VideoVisualization3D import...');
+                try {
+                    const { VideoVisualization3D } = await import('./js/components/VideoVisualization3D.js');
+                    log(' VideoVisualization3D imported', 'success');
+                    
+                    // Test 4: Can we create an instance?
+                    log('Creating VideoVisualization3D instance...');
+                    const container = document.createElement('div');
+                    container.id = 'test-container';
+                    document.body.appendChild(container);
+                    
+                    const viz = new VideoVisualization3D({
+                        container: container,
+                        eventBus: new EventBus(),
+                        apiClient: new APIClient('/api')
+                    });
+                    log(' VideoVisualization3D instance created', 'success');
+                    
+                    // Test 5: Can we initialize it?
+                    log('Initializing VideoVisualization3D...');
+                    await viz.init();
+                    log(' VideoVisualization3D initialized', 'success');
+                    
+                } catch (e) {
+                    log(` VideoVisualization3D error: ${e.message}`, 'error');
+                    log(`Stack trace: ${e.stack}`, 'error');
+                }
+                
+                // Test 6: Can we load the main app?
+                log('Testing main app import...');
+                try {
+                    const mainModule = await import('./js/main.js');
+                    log(' Main app imported', 'success');
+                } catch (e) {
+                    log(` Main app import failed: ${e.message}`, 'error');
+                    log(`Stack trace: ${e.stack}`, 'error');
+                }
+                
+            } catch (error) {
+                log(`Fatal error: ${error.message}`, 'error');
+                log(`Stack trace: ${error.stack}`, 'error');
+            }
+        }
+        
+        // Run debug
+        debugApp();
+    </script>
+</body>
+</html>

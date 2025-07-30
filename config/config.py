@@ -133,7 +133,7 @@ class AnomalyDetectionConfig:
 class FlaskConfig:
     """Flask application configuration"""
     host: str = '0.0.0.0'
-    port: int = 5000
+    port: int = 8200
     debug: bool = False
     secret_key: str = field(default_factory=lambda: os.getenv('FLASK_SECRET_KEY', 'dev-secret-key'))
     

@@ -40,33 +40,83 @@ class VideoAnalysisApp {
     async init() {
         try {
             console.log('🚀 Initializing Video Analysis App...');
+            console.log('Step 1: Starting initialization');
             
             // Show loading
             this.showLoading(true, 'Initializing application...');
+            console.log('Step 2: Loading screen shown');
             
             // Initialize performance monitoring
-            this.performanceMonitor.start();
+            try {
+                this.performanceMonitor.start();
+                console.log('Step 3: Performance monitor started');
+            } catch (e) {
+                console.error('Step 3 FAILED:', e);
+                throw e;
+            }
             
             // Initialize components
-            await this.initializeComponents();
+            console.log('Step 4: About to initialize components');
+            try {
+                await this.initializeComponents();
+                console.log('Step 5: Components initialized');
+            } catch (e) {
+                console.error('Step 5 FAILED - Component initialization error:', e);
+                console.error('Error details:', e.stack);
+                throw e;
+            }
             
             // Set up event listeners
-            this.setupEventListeners();
+            console.log('Step 6: Setting up event listeners');
+            try {
+                this.setupEventListeners();
+                console.log('Step 7: Event listeners set up');
+            } catch (e) {
+                console.error('Step 7 FAILED:', e);
+                throw e;
+            }
             
             // Load initial data
-            await this.loadInitialData();
+            console.log('Step 8: About to load initial data');
+            try {
+                await this.loadInitialData();
+                console.log('Step 9: Initial data loaded');
+            } catch (e) {
+                console.error('Step 9 FAILED - Data loading error:', e);
+                console.error('Error details:', e.stack);
+                // Don't throw here, try to continue
+            }
             
             // Start render loop
-            this.startRenderLoop();
+            console.log('Step 10: Starting render loop');
+            try {
+                this.startRenderLoop();
+                console.log('Step 11: Render loop started');
+            } catch (e) {
+                console.error('Step 11 FAILED:', e);
+                // Don't throw here, try to continue
+            }
             
             // Hide loading
+            console.log('Step 12: Hiding loading screen');
             this.showLoading(false);
             
             console.log('✅ Video Analysis App initialized successfully');
             
         } catch (error) {
-            console.error('❌ Failed to initialize app:', error);
-            this.showError('Failed to initialize application. Please refresh the page.');
+            console.error('❌ CRITICAL: Failed to initialize app:', error);
+            console.error('Error type:', error.constructor.name);
+            console.error('Error message:', error.message);
+            console.error('Error stack:', error.stack);
+            
+            // Try to hide loading anyway
+            try {
+                this.showLoading(false);
+            } catch (e) {
+                console.error('Could not hide loading:', e);
+            }
+            
+            this.showError(`Failed to initialize: ${error.message}`);
         }
     }
     
@@ -74,12 +124,27 @@ class VideoAnalysisApp {
         console.log('🔧 Initializing components...');
         
         try {
+            // Check if elements exist
+            const canvasEl = document.getElementById('three-canvas');
+            console.log('Canvas element:', canvasEl ? 'Found' : 'NOT FOUND');
+            
+            const controlEl = document.getElementById('control-panel');
+            console.log('Control panel element:', controlEl ? 'Found' : 'NOT FOUND');
+            
+            const modalEl = document.getElementById('detail-modal');
+            console.log('Detail modal element:', modalEl ? 'Found' : 'NOT FOUND');
+            
+            const playerEl = document.getElementById('video-player-modal');
+            console.log('Video player element:', playerEl ? 'Found' : 'NOT FOUND');
+            
             // Initialize 3D visualization
+            console.log('Creating VideoVisualization3D...');
             this.visualization = new VideoVisualization3D({
-                container: document.getElementById('three-canvas'),
+                container: canvasEl || document.createElement('div'),
                 eventBus: this.eventBus,
                 apiClient: this.apiClient
             });
+            console.log('VideoVisualization3D created');
             
             // Initialize control panel
             this.controlPanel = new ControlPanel({
@@ -103,14 +168,31 @@ class VideoAnalysisApp {
             });
             
             // Initialize all components
-            await Promise.all([
-                this.visualization.init(),
-                this.controlPanel.init(),
-                this.detailModal.init(),
-                this.videoPlayer.init()
-            ]);
-            
-            console.log('✅ All components initialized');
+            console.log('Initializing components in parallel...');
+            try {
+                await Promise.all([
+                    this.visualization.init().catch(e => {
+                        console.error('Visualization init failed:', e);
+                        throw e;
+                    }),
+                    this.controlPanel.init().catch(e => {
+                        console.error('ControlPanel init failed:', e);
+                        throw e;
+                    }),
+                    this.detailModal.init().catch(e => {
+                        console.error('DetailModal init failed:', e);
+                        throw e;
+                    }),
+                    this.videoPlayer.init().catch(e => {
+                        console.error('VideoPlayer init failed:', e);
+                        throw e;
+                    })
+                ]);
+                console.log('✅ All components initialized');
+            } catch (e) {
+                console.error('Component initialization failed:', e);
+                throw e;
+            }
             
         } catch (error) {
             console.error('❌ Component initialization failed:', error);
@@ -279,19 +361,29 @@ class VideoAnalysisApp {
             console.log('🏥 System health:', health);
             
             // Load initial batch of videos
+            console.log('Fetching videos from API...');
             const videosResponse = await this.apiClient.getVideos({
                 page: 1,
                 per_page: 5000  // Start with reasonable batch
             });
             
             console.log(`📹 Loaded ${videosResponse.videos.length} videos`);
+            console.log('First video:', videosResponse.videos[0]);
             
             // Update app state
             this.appState.totalVideos = videosResponse.pagination.total;
             this.appState.visiblePoints = videosResponse.videos;
+            console.log('App state updated');
             
             // Initialize visualization with data
-            await this.visualization.loadVideoData(videosResponse.videos);
+            console.log('About to call visualization.loadVideoData...');
+            if (this.visualization && this.visualization.loadVideoData) {
+                await this.visualization.loadVideoData(videosResponse.videos);
+                console.log('Visualization data loaded');
+            } else {
+                console.error('Visualization not ready or loadVideoData method missing!');
+                console.log('this.visualization:', this.visualization);
+            }
             
             // Load metadata filters
             try {
@@ -858,3 +950,31 @@ window.addEventListener('beforeunload', () => {
         window.videoAnalysisApp.performanceMonitor.stop();
     }
 });
+
+// Global error handlers for debugging
+window.addEventListener('error', (event) => {
+    console.error('🚨 Global JavaScript Error:', event.error);
+    console.error('Error details:', {
+        message: event.message,
+        filename: event.filename,
+        lineno: event.lineno,
+        colno: event.colno,
+        stack: event.error?.stack
+    });
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+    console.error('🚨 Unhandled Promise Rejection:', event.reason);
+    console.error('Rejection details:', event);
+});
+
+// Initialize the application when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('📄 DOM loaded, creating VideoAnalysisApp');
+        window.videoAnalysisApp = new VideoAnalysisApp();
+    });
+} else {
+    console.log('📄 DOM already loaded, creating VideoAnalysisApp');
+    window.videoAnalysisApp = new VideoAnalysisApp();
+}

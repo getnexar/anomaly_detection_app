@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Minimal Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        button { margin: 10px; padding: 10px 20px; font-size: 16px; }
+        .status { margin: 20px 0; padding: 10px; background: #f0f0f0; }
+    </style>
+</head>
+<body>
+    <h1>Minimal Test - Direct Actions</h1>
+    
+    <button onclick="testHideLoading()">Test Hide Loading</button>
+    <button onclick="testInitApp()">Test Initialize App</button>
+    <button onclick="checkElements()">Check DOM Elements</button>
+    <button onclick="forceHideLoading()">Force Hide Loading</button>
+    
+    <div class="status" id="status">Ready</div>
+    
+    <iframe id="app-frame" src="/" width="100%" height="500" style="border: 2px solid black; margin-top: 20px;"></iframe>
+    
+    <script>
+        const status = document.getElementById('status');
+        const iframe = document.getElementById('app-frame');
+        
+        function log(msg) {
+            console.log(msg);
+            status.innerHTML += '<br>' + msg;
+        }
+        
+        function testHideLoading() {
+            try {
+                const win = iframe.contentWindow;
+                const loader = win.document.getElementById('loading-indicator');
+                log(`Loading indicator found: ${loader ? 'YES' : 'NO'}`);
+                if (loader) {
+                    log(`Current display: ${loader.style.display}`);
+                    log(`Attempting to hide...`);
+                    loader.style.display = 'none';
+                    log(`New display: ${loader.style.display}`);
+                }
+            } catch (e) {
+                log(`Error: ${e.message}`);
+            }
+        }
+        
+        function testInitApp() {
+            try {
+                const win = iframe.contentWindow;
+                log(`VideoAnalysisApp exists: ${win.VideoAnalysisApp ? 'YES' : 'NO'}`);
+                log(`videoAnalysisApp instance exists: ${win.videoAnalysisApp ? 'YES' : 'NO'}`);
+                
+                if (win.VideoAnalysisApp && !win.videoAnalysisApp) {
+                    log('Creating new VideoAnalysisApp instance...');
+                    win.videoAnalysisApp = new win.VideoAnalysisApp();
+                } else if (win.videoAnalysisApp) {
+                    log('App already exists, checking state...');
+                    log(`isLoading: ${win.videoAnalysisApp.appState?.isLoading}`);
+                }
+            } catch (e) {
+                log(`Error: ${e.message}`);
+            }
+        }
+        
+        function checkElements() {
+            try {
+                const win = iframe.contentWindow;
+                const elements = [
+                    'loading-indicator',
+                    'three-canvas', 
+                    'control-panel',
+                    'visualization-container',
+                    'app'
+                ];
+                
+                elements.forEach(id => {
+                    const el = win.document.getElementById(id);
+                    log(`${id}: ${el ? 'FOUND' : 'NOT FOUND'}`);
+                });
+                
+                // Check console for errors
+                if (win.console && win.console._errors) {
+                    log(`Console errors: ${win.console._errors.length}`);
+                }
+            } catch (e) {
+                log(`Error: ${e.message}`);
+            }
+        }
+        
+        function forceHideLoading() {
+            try {
+                const win = iframe.contentWindow;
+                
+                // Method 1: Direct style
+                const loader = win.document.getElementById('loading-indicator');
+                if (loader) {
+                    loader.style.display = 'none !important';
+                    loader.style.visibility = 'hidden';
+                    loader.style.opacity = '0';
+                    loader.remove(); // Nuclear option
+                    log('Loading indicator forcefully removed');
+                }
+                
+                // Method 2: Remove loading class
+                win.document.body.classList.remove('loading');
+                
+                // Method 3: Show main content
+                const app = win.document.getElementById('app');
+                if (app) {
+                    app.style.display = 'flex';
+                    app.style.visibility = 'visible';
+                }
+                
+                log('Force hide complete');
+            } catch (e) {
+                log(`Error: ${e.message}`);
+            }
+        }
+        
+        // Auto-check after iframe loads
+        iframe.onload = function() {
+            log('=== Iframe loaded ===');
+            setTimeout(() => {
+                checkElements();
+                
+                // Check if still loading after 3 seconds
+                setTimeout(() => {
+                    const win = iframe.contentWindow;
+                    const loader = win.document.getElementById('loading-indicator');
+                    if (loader && loader.style.display !== 'none') {
+                        log('!!! STILL LOADING AFTER 3 SECONDS !!!');
+                        testInitApp();
+                    }
+                }, 3000);
+            }, 1000);
+        };
+    </script>
+</body>
+</html>

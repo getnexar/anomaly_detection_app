@@ -1,0 +1,1557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Analysis Dashboard - Professional</title>
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            overflow: hidden;
+        }
+        
+        #loading-indicator {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 10, 10, 0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            transition: opacity 0.5s ease;
+        }
+        
+        #loading-indicator.hiding {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .loading-content {
+            text-align: center;
+        }
+        
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 3px solid rgba(41, 98, 255, 0.1);
+            border-top: 3px solid #2962ff;
+            border-radius: 50%;
+            animation: spin 1s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .app-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: rgba(10, 10, 10, 0.8);
+            backdrop-filter: blur(20px);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            z-index: 1000;
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.5);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .app-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin: 0;
+            margin-right: 30px;
+            color: #fff;
+        }
+        
+        .stats-container {
+            display: flex;
+            gap: 25px;
+            font-size: 13px;
+            color: #666;
+        }
+        
+        .stat-item span {
+            color: #2962ff;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+        
+        .header-right {
+            margin-left: auto;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .search-box {
+            position: relative;
+        }
+        
+        .search-input {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 6px 35px 6px 15px;
+            color: #fff;
+            font-size: 13px;
+            width: 200px;
+            transition: all 0.3s ease;
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: #2962ff;
+            background: rgba(255, 255, 255, 0.08);
+            width: 250px;
+        }
+        
+        .search-icon {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #666;
+            font-size: 14px;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 60px;
+            left: 0;
+            width: 320px;
+            height: calc(100vh - 60px);
+            background: rgba(10, 10, 10, 0.8);
+            backdrop-filter: blur(20px);
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
+            overflow-y: auto;
+            z-index: 900;
+            transition: transform 0.3s ease;
+        }
+        
+        .sidebar.collapsed {
+            transform: translateX(-320px);
+        }
+        
+        .sidebar-toggle {
+            position: fixed;
+            top: 80px;
+            left: 320px;
+            width: 30px;
+            height: 60px;
+            background: rgba(10, 10, 10, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-left: none;
+            border-radius: 0 8px 8px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 901;
+        }
+        
+        .sidebar.collapsed + .sidebar-toggle {
+            left: 0;
+        }
+        
+        .sidebar-toggle:hover {
+            background: rgba(41, 98, 255, 0.1);
+        }
+        
+        .sidebar-section {
+            padding: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #888;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .filter-group {
+            margin-bottom: 15px;
+        }
+        
+        .filter-label {
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 8px;
+            display: block;
+        }
+        
+        .filter-select,
+        .filter-input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: #fff;
+            font-size: 13px;
+            transition: all 0.2s ease;
+        }
+        
+        .filter-select:focus,
+        .filter-input:focus {
+            outline: none;
+            border-color: #2962ff;
+            background: rgba(255, 255, 255, 0.08);
+        }
+        
+        .filter-slider {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        .filter-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #2962ff;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        .filter-value {
+            font-size: 12px;
+            color: #2962ff;
+            float: right;
+        }
+        
+        .view-modes {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        
+        .view-mode-btn {
+            flex: 1;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            color: #999;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .view-mode-btn.active {
+            background: rgba(41, 98, 255, 0.2);
+            border-color: #2962ff;
+            color: #2962ff;
+        }
+        
+        .view-mode-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+        
+        .cluster-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .cluster-item {
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 6px;
+            margin-bottom: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+        }
+        
+        .cluster-item:hover {
+            background: rgba(41, 98, 255, 0.1);
+        }
+        
+        .cluster-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+            display: inline-block;
+        }
+        
+        .cluster-count {
+            color: #666;
+            font-size: 11px;
+        }
+        
+        /* Detail Panel */
+        .detail-panel {
+            position: fixed;
+            top: 60px;
+            right: -400px;
+            width: 400px;
+            height: calc(100vh - 60px);
+            background: rgba(10, 10, 10, 0.9);
+            backdrop-filter: blur(20px);
+            border-left: 1px solid rgba(255, 255, 255, 0.05);
+            overflow-y: auto;
+            z-index: 900;
+            transition: transform 0.3s ease;
+        }
+        
+        .detail-panel.open {
+            transform: translateX(-400px);
+        }
+        
+        .detail-header {
+            padding: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            position: relative;
+        }
+        
+        .detail-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: none;
+            border: none;
+            color: #666;
+            font-size: 24px;
+            cursor: pointer;
+            transition: color 0.2s ease;
+        }
+        
+        .detail-close:hover {
+            color: #fff;
+        }
+        
+        .detail-content {
+            padding: 20px;
+        }
+        
+        .detail-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0 0 20px 0;
+            color: #fff;
+        }
+        
+        .detail-section {
+            margin-bottom: 25px;
+        }
+        
+        .detail-section h4 {
+            font-size: 12px;
+            font-weight: 600;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 0 0 10px 0;
+        }
+        
+        .detail-info {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 8px 16px;
+            font-size: 13px;
+        }
+        
+        .detail-label {
+            color: #666;
+        }
+        
+        .detail-value {
+            color: #ddd;
+        }
+        
+        .video-player-placeholder {
+            width: 100%;
+            height: 200px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+            margin-top: 10px;
+        }
+        
+        /* Controls info */
+        .controls-info {
+            position: fixed;
+            bottom: 20px;
+            left: 340px;
+            background: rgba(10, 10, 10, 0.7);
+            backdrop-filter: blur(20px);
+            padding: 18px;
+            border-radius: 12px;
+            font-size: 12px;
+            line-height: 1.8;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            z-index: 100;
+            transition: all 0.3s ease;
+        }
+        
+        .sidebar.collapsed ~ .controls-info {
+            left: 20px;
+        }
+        
+        .controls-info strong {
+            color: #888;
+            display: block;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+        
+        #hover-info {
+            position: fixed;
+            background: rgba(10, 10, 10, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 14px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            pointer-events: none;
+            display: none;
+            z-index: 1001;
+            max-width: 300px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: opacity 0.2s ease;
+        }
+        
+        #hover-info strong {
+            color: #fff;
+            display: block;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+        
+        .zoom-controls {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 100;
+        }
+        
+        .zoom-button {
+            width: 40px;
+            height: 40px;
+            background: rgba(10, 10, 10, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: #666;
+            font-size: 20px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .zoom-button:hover {
+            background: rgba(41, 98, 255, 0.1);
+            color: #2962ff;
+            transform: scale(1.1);
+        }
+        
+        .zoom-button:active {
+            transform: scale(0.95);
+        }
+        
+        canvas {
+            display: block;
+            cursor: grab;
+            transition: cursor 0.1s ease;
+        }
+        
+        canvas.dragging {
+            cursor: grabbing;
+        }
+        
+        canvas.panning {
+            cursor: move;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading-indicator">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+        </div>
+    </div>
+    
+    <div class="app-header">
+        <h1 class="app-title">Video Analysis Dashboard</h1>
+        <div class="stats-container">
+            <span class="stat-item">Videos: <span id="total-videos">0</span></span>
+            <span class="stat-item">Visible: <span id="visible-videos">0</span></span>
+            <span class="stat-item">FPS: <span id="fps-counter">0</span></span>
+        </div>
+        <div class="header-right">
+            <div class="search-box">
+                <input type="text" class="search-input" placeholder="Search videos..." id="search-input">
+                <span class="search-icon">🔍</span>
+            </div>
+            <span id="status" style="font-size: 13px; color: #888;">Initializing...</span>
+        </div>
+    </div>
+    
+    <!-- Sidebar with filters -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-section">
+            <h3 class="section-title">View Mode</h3>
+            <div class="view-modes">
+                <button class="view-mode-btn active" data-mode="clusters">Clusters</button>
+                <button class="view-mode-btn" data-mode="anomalies">Anomalies</button>
+                <button class="view-mode-btn" data-mode="events">Events</button>
+            </div>
+        </div>
+        
+        <div class="sidebar-section">
+            <h3 class="section-title">Filters</h3>
+            
+            <div class="filter-group">
+                <label class="filter-label">Event Type</label>
+                <select class="filter-select" id="filter-event">
+                    <option value="">All Events</option>
+                    <option value="normal-driving">Normal Driving</option>
+                    <option value="full-stop">Full Stop</option>
+                    <option value="near-collision">Near Collision</option>
+                    <option value="traffic-jam">Traffic Jam</option>
+                    <option value="unknown">Unknown</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label class="filter-label">Location</label>
+                <select class="filter-select" id="filter-location">
+                    <option value="">All Locations</option>
+                    <option value="highway">Highway</option>
+                    <option value="main-road">Main Road</option>
+                    <option value="intersection-with-traffic-lights">Intersection (Traffic Lights)</option>
+                    <option value="intersection-with-traffic-signs">Intersection (Traffic Signs)</option>
+                    <option value="parking-lot">Parking Lot</option>
+                    <option value="street-parking">Street Parking</option>
+                    <option value="driveway-entrance">Driveway Entrance</option>
+                    <option value="off-road">Off Road</option>
+                    <option value="indoor">Indoor</option>
+                    <option value="other">Other</option>
+                    <option value="unknown">Unknown</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label class="filter-label">
+                    Anomaly Score (Min)
+                    <span class="filter-value" id="anomaly-value">0.0</span>
+                </label>
+                <input type="range" class="filter-slider" id="filter-anomaly" 
+                       min="0" max="1" step="0.05" value="0">
+            </div>
+            
+            <button class="view-mode-btn" style="width: 100%; margin-top: 15px;" id="apply-filters">
+                Apply Filters
+            </button>
+            <button class="view-mode-btn" style="width: 100%; margin-top: 8px;" id="clear-filters">
+                Clear Filters
+            </button>
+        </div>
+        
+        <div class="sidebar-section">
+            <h3 class="section-title">Clusters</h3>
+            <div class="cluster-list" id="cluster-list">
+                <!-- Clusters will be populated here -->
+            </div>
+        </div>
+        
+        <div class="sidebar-section">
+            <h3 class="section-title">Statistics</h3>
+            <div class="detail-info">
+                <span class="detail-label">Total Videos:</span>
+                <span class="detail-value" id="stat-total">0</span>
+                <span class="detail-label">Anomalies:</span>
+                <span class="detail-value" id="stat-anomalies">0</span>
+                <span class="detail-label">Clusters:</span>
+                <span class="detail-value" id="stat-clusters">0</span>
+                <span class="detail-label">Avg Anomaly:</span>
+                <span class="detail-value" id="stat-avg-anomaly">0%</span>
+            </div>
+        </div>
+    </div>
+    
+    <button class="sidebar-toggle" id="sidebar-toggle">
+        <span id="toggle-icon">◀</span>
+    </button>
+    
+    <!-- Detail Panel -->
+    <div class="detail-panel" id="detail-panel">
+        <div class="detail-header">
+            <button class="detail-close" onclick="closeDetailPanel()">×</button>
+            <h3 class="detail-title" id="detail-title">Video Details</h3>
+        </div>
+        <div class="detail-content" id="detail-content">
+            <!-- Details will be populated here -->
+        </div>
+    </div>
+    
+    <div class="controls-info">
+        <strong>Navigation Controls</strong>
+        • Left Click + Drag: Rotate view<br>
+        • Right Click + Drag: Pan camera<br>
+        • Scroll / Pinch: Zoom in/out<br>
+        • Click Bubble: View details<br>
+        • Double Click: Focus on point<br>
+        • Space: Reset view
+    </div>
+    
+    <div class="zoom-controls">
+        <button class="zoom-button" id="zoom-in">+</button>
+        <button class="zoom-button" id="zoom-out">−</button>
+    </div>
+    
+    <div id="hover-info"></div>
+
+    <!-- Load Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <script>
+        // Professional visualization with working filters
+        class ProfessionalVisualization {
+            constructor() {
+                this.scene = new THREE.Scene();
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.renderer = new THREE.WebGLRenderer({ 
+                    antialias: true,
+                    alpha: false,
+                    powerPreference: "high-performance"
+                });
+                
+                // Camera controls
+                this.camera.position.set(50, 30, 50);
+                this.cameraTarget = new THREE.Vector3(0, 0, 0);
+                this.cameraDistance = 50;
+                this.cameraAngleX = 0;
+                this.cameraAngleY = Math.PI / 4;
+                
+                // Smooth motion
+                this.targetCameraAngleX = 0;
+                this.targetCameraAngleY = Math.PI / 4;
+                this.targetCameraDistance = 50;
+                this.targetCameraTarget = new THREE.Vector3(0, 0, 0);
+                
+                // Mouse state
+                this.isDragging = false;
+                this.isPanning = false;
+                this.previousMousePosition = { x: 0, y: 0 };
+                
+                // Momentum
+                this.momentumX = 0;
+                this.momentumY = 0;
+                this.lastMoveTime = Date.now();
+                
+                // Raycasting
+                this.raycaster = new THREE.Raycaster();
+                this.raycaster.params.Points.threshold = 3;
+                this.mouse = new THREE.Vector2();
+                this.bubbles = [];
+                this.videos = [];
+                this.allVideos = []; // Keep original data
+                this.selectedBubble = null;
+                this.hoveredBubble = null;
+                
+                // View state
+                this.currentViewMode = 'clusters';
+                this.clusterColors = new Map();
+                this.filters = {
+                    event: '',
+                    location: '',
+                    anomalyMin: 0
+                };
+                
+                // Professional color palettes
+                this.professionalColors = {
+                    clusters: [
+                        0x2962ff, // Blue
+                        0x00b8d4, // Cyan
+                        0x00bfa5, // Teal
+                        0x64dd17, // Light Green
+                        0xffab00, // Amber
+                        0xff6d00, // Deep Orange
+                        0xdd2c00, // Red
+                        0x6200ea, // Deep Purple
+                        0x455a64, // Blue Grey
+                        0x37474f  // Dark Blue Grey
+                    ],
+                    anomaly: {
+                        low: 0x43a047,    // Green
+                        medium: 0xfb8c00, // Orange
+                        high: 0xe53935    // Red
+                    },
+                    events: {
+                        'normal-driving': 0x43a047,     // Green
+                        'full-stop': 0x1e88e5,          // Blue
+                        'near-collision': 0xe53935,     // Red
+                        'traffic-jam': 0xfb8c00,        // Orange
+                        'unknown': 0x757575             // Grey
+                    }
+                };
+                
+                // Performance
+                this.clock = new THREE.Clock();
+                this.lastFrameTime = performance.now();
+                this.frameCount = 0;
+                this.fps = 0;
+                
+                this.init();
+            }
+            
+            init() {
+                // Setup renderer
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                document.body.appendChild(this.renderer.domElement);
+                
+                // Setup scene
+                this.scene.background = new THREE.Color(0x0a0a0a);
+                this.scene.fog = new THREE.Fog(0x0a0a0a, 100, 300);
+                
+                // Professional lighting
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+                this.scene.add(ambientLight);
+                
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+                directionalLight.position.set(50, 50, 50);
+                directionalLight.castShadow = true;
+                directionalLight.shadow.mapSize.width = 2048;
+                directionalLight.shadow.mapSize.height = 2048;
+                this.scene.add(directionalLight);
+                
+                const pointLight = new THREE.PointLight(0x2962ff, 0.3, 100);
+                pointLight.position.set(0, 20, 0);
+                this.scene.add(pointLight);
+                
+                // Subtle grid
+                const gridHelper = new THREE.GridHelper(100, 20, 0x1a1a1a, 0x0f0f0f);
+                gridHelper.material.opacity = 0.3;
+                gridHelper.material.transparent = true;
+                this.scene.add(gridHelper);
+                
+                // Setup controls
+                this.setupControls();
+                this.setupUIHandlers();
+                
+                // Handle resize
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+                
+                // FPS counter
+                setInterval(() => {
+                    document.getElementById('fps-counter').textContent = Math.round(this.fps);
+                }, 100);
+            }
+            
+            setupControls() {
+                const canvas = this.renderer.domElement;
+                const sensitivity = 0.005;
+                
+                // Mouse down
+                canvas.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    
+                    if (e.button === 0) { // Left click
+                        this.isDragging = true;
+                        canvas.className = 'dragging';
+                    } else if (e.button === 2) { // Right click
+                        this.isPanning = true;
+                        canvas.className = 'panning';
+                    }
+                    
+                    this.previousMousePosition = { x: e.clientX, y: e.clientY };
+                    this.momentumX = 0;
+                    this.momentumY = 0;
+                });
+                
+                // Mouse move
+                canvas.addEventListener('mousemove', (e) => {
+                    // Update mouse position for raycasting
+                    this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                    this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+                    
+                    const currentTime = Date.now();
+                    const deltaTime = currentTime - this.lastMoveTime;
+                    this.lastMoveTime = currentTime;
+                    
+                    if (this.isDragging) {
+                        const deltaMove = {
+                            x: e.clientX - this.previousMousePosition.x,
+                            y: e.clientY - this.previousMousePosition.y
+                        };
+                        
+                        if (deltaTime > 0) {
+                            this.momentumX = deltaMove.x / deltaTime * 0.5;
+                            this.momentumY = deltaMove.y / deltaTime * 0.5;
+                        }
+                        
+                        this.targetCameraAngleX += deltaMove.x * sensitivity;
+                        this.targetCameraAngleY -= deltaMove.y * sensitivity;
+                        this.targetCameraAngleY = Math.max(0.1, Math.min(Math.PI - 0.1, this.targetCameraAngleY));
+                        
+                        this.previousMousePosition = { x: e.clientX, y: e.clientY };
+                    } else if (this.isPanning) {
+                        const deltaMove = {
+                            x: e.clientX - this.previousMousePosition.x,
+                            y: e.clientY - this.previousMousePosition.y
+                        };
+                        
+                        const panSpeed = this.cameraDistance * 0.0005;
+                        const right = new THREE.Vector3(1, 0, 0);
+                        const up = new THREE.Vector3(0, 1, 0);
+                        
+                        right.applyQuaternion(this.camera.quaternion);
+                        up.applyQuaternion(this.camera.quaternion);
+                        
+                        this.targetCameraTarget.add(right.multiplyScalar(-deltaMove.x * panSpeed));
+                        this.targetCameraTarget.add(up.multiplyScalar(deltaMove.y * panSpeed));
+                        
+                        this.previousMousePosition = { x: e.clientX, y: e.clientY };
+                    } else {
+                        this.checkHover(e);
+                    }
+                });
+                
+                // Mouse up
+                window.addEventListener('mouseup', (e) => {
+                    if (!this.isDragging && !this.isPanning && e.button === 0) {
+                        this.checkClick(e);
+                    }
+                    
+                    this.isDragging = false;
+                    this.isPanning = false;
+                    canvas.className = '';
+                    
+                    if (Math.abs(this.momentumX) > 0.1 || Math.abs(this.momentumY) > 0.1) {
+                        this.applyMomentum();
+                    }
+                });
+                
+                // Double click
+                canvas.addEventListener('dblclick', (e) => {
+                    this.checkDoubleClick(e);
+                });
+                
+                // Mouse wheel
+                canvas.addEventListener('wheel', (e) => {
+                    e.preventDefault();
+                    const zoomSpeed = 1.05;
+                    
+                    if (e.deltaY < 0) {
+                        this.targetCameraDistance /= zoomSpeed;
+                    } else {
+                        this.targetCameraDistance *= zoomSpeed;
+                    }
+                    
+                    this.targetCameraDistance = Math.max(10, Math.min(200, this.targetCameraDistance));
+                });
+                
+                // Prevent context menu
+                canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+                
+                // Keyboard
+                window.addEventListener('keydown', (e) => {
+                    if (e.code === 'Space') {
+                        e.preventDefault();
+                        this.resetCamera();
+                    }
+                });
+                
+                // Zoom buttons
+                document.getElementById('zoom-in').addEventListener('click', () => {
+                    this.targetCameraDistance = Math.max(10, this.targetCameraDistance / 1.2);
+                });
+                
+                document.getElementById('zoom-out').addEventListener('click', () => {
+                    this.targetCameraDistance = Math.min(200, this.targetCameraDistance * 1.2);
+                });
+            }
+            
+            setupUIHandlers() {
+                // Sidebar toggle
+                const sidebar = document.getElementById('sidebar');
+                const toggleBtn = document.getElementById('sidebar-toggle');
+                const toggleIcon = document.getElementById('toggle-icon');
+                
+                toggleBtn.addEventListener('click', () => {
+                    sidebar.classList.toggle('collapsed');
+                    toggleIcon.textContent = sidebar.classList.contains('collapsed') ? '▶' : '◀';
+                });
+                
+                // View mode buttons
+                document.querySelectorAll('.view-mode-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const mode = btn.dataset.mode;
+                        if (mode) {
+                            document.querySelectorAll('.view-mode-btn').forEach(b => b.classList.remove('active'));
+                            btn.classList.add('active');
+                            this.setViewMode(mode);
+                        }
+                    });
+                });
+                
+                // Filters
+                const anomalySlider = document.getElementById('filter-anomaly');
+                const anomalyValue = document.getElementById('anomaly-value');
+                
+                anomalySlider.addEventListener('input', () => {
+                    anomalyValue.textContent = parseFloat(anomalySlider.value).toFixed(2);
+                });
+                
+                document.getElementById('apply-filters').addEventListener('click', () => {
+                    this.applyFilters();
+                });
+                
+                document.getElementById('clear-filters').addEventListener('click', () => {
+                    this.clearFilters();
+                });
+                
+                // Search
+                const searchInput = document.getElementById('search-input');
+                let searchTimeout;
+                searchInput.addEventListener('input', (e) => {
+                    clearTimeout(searchTimeout);
+                    searchTimeout = setTimeout(() => {
+                        this.searchVideos(e.target.value);
+                    }, 300);
+                });
+            }
+            
+            applyMomentum() {
+                const dampingFactor = 0.92;
+                
+                const momentumAnimation = () => {
+                    if (Math.abs(this.momentumX) > 0.01 || Math.abs(this.momentumY) > 0.01) {
+                        this.targetCameraAngleX += this.momentumX * 0.005;
+                        this.targetCameraAngleY -= this.momentumY * 0.005;
+                        this.targetCameraAngleY = Math.max(0.1, Math.min(Math.PI - 0.1, this.targetCameraAngleY));
+                        
+                        this.momentumX *= dampingFactor;
+                        this.momentumY *= dampingFactor;
+                        
+                        requestAnimationFrame(momentumAnimation);
+                    }
+                };
+                
+                momentumAnimation();
+            }
+            
+            updateCamera() {
+                const lerpFactor = 0.08;
+                
+                this.cameraAngleX += (this.targetCameraAngleX - this.cameraAngleX) * lerpFactor;
+                this.cameraAngleY += (this.targetCameraAngleY - this.cameraAngleY) * lerpFactor;
+                this.cameraDistance += (this.targetCameraDistance - this.cameraDistance) * lerpFactor;
+                
+                this.cameraTarget.lerp(this.targetCameraTarget, lerpFactor);
+                
+                this.camera.position.x = this.cameraTarget.x + this.cameraDistance * Math.sin(this.cameraAngleY) * Math.cos(this.cameraAngleX);
+                this.camera.position.y = this.cameraTarget.y + this.cameraDistance * Math.cos(this.cameraAngleY);
+                this.camera.position.z = this.cameraTarget.z + this.cameraDistance * Math.sin(this.cameraAngleY) * Math.sin(this.cameraAngleX);
+                
+                this.camera.lookAt(this.cameraTarget);
+            }
+            
+            async loadData() {
+                try {
+                    const response = await fetch('/api/videos?page=1&per_page=1000');
+                    const data = await response.json();
+                    const videos = data.videos || [];
+                    
+                    console.log(`Loaded ${videos.length} videos`);
+                    document.getElementById('status').textContent = `${videos.length} videos loaded`;
+                    document.getElementById('total-videos').textContent = videos.length;
+                    document.getElementById('visible-videos').textContent = videos.length;
+                    document.getElementById('stat-total').textContent = videos.length;
+                    
+                    // Store all videos
+                    this.allVideos = videos;
+                    this.videos = videos;
+                    
+                    // Create bubbles
+                    this.createBubbles(videos);
+                    
+                    // Update statistics
+                    this.updateStatistics(videos);
+                    
+                    // Update cluster list
+                    this.updateClusterList(videos);
+                    
+                    // Fade out loading
+                    const loader = document.getElementById('loading-indicator');
+                    loader.classList.add('hiding');
+                    setTimeout(() => loader.style.display = 'none', 500);
+                    
+                    // Initial animation
+                    this.animateIntro();
+                    
+                } catch (error) {
+                    console.error('Failed to load data:', error);
+                    document.getElementById('status').textContent = 'Error loading data';
+                }
+            }
+            
+            createBubbles(videos) {
+                // Remove existing bubbles
+                this.bubbles.forEach(bubble => {
+                    this.scene.remove(bubble.mesh);
+                    bubble.mesh.geometry.dispose();
+                    bubble.mesh.material.dispose();
+                });
+                this.bubbles = [];
+                
+                // Create bubble geometry (shared)
+                const sphereGeometry = new THREE.SphereGeometry(1, 16, 12);
+                
+                videos.forEach((video, i) => {
+                    // Position
+                    let x, y, z;
+                    if (video.coordinates_3d) {
+                        x = video.coordinates_3d[0] * 10;
+                        y = video.coordinates_3d[1] * 10;
+                        z = video.coordinates_3d[2] * 10;
+                    } else {
+                        x = (Math.random() - 0.5) * 40;
+                        y = (Math.random() - 0.5) * 40;
+                        z = (Math.random() - 0.5) * 40;
+                    }
+                    
+                    // Color based on view mode
+                    const color = this.getColorForVideo(video);
+                    
+                    // Size based on anomaly score
+                    const size = 0.5 + (video.anomaly_score || 0) * 1.5;
+                    
+                    // Create bubble material
+                    const material = new THREE.MeshPhongMaterial({
+                        color: color,
+                        transparent: true,
+                        opacity: 0.6,
+                        shininess: 80,
+                        specular: 0x222222
+                    });
+                    
+                    // Create bubble mesh
+                    const bubble = new THREE.Mesh(sphereGeometry, material);
+                    bubble.position.set(x, y, z);
+                    bubble.scale.set(size, size, size);
+                    bubble.castShadow = true;
+                    bubble.receiveShadow = true;
+                    
+                    // Store reference
+                    bubble.userData = { video: video, index: i, originalScale: size };
+                    
+                    this.scene.add(bubble);
+                    this.bubbles.push({
+                        mesh: bubble,
+                        video: video,
+                        targetScale: size,
+                        currentScale: size,
+                        originalScale: size
+                    });
+                });
+                
+                this.videos = videos;
+            }
+            
+            getColorForVideo(video) {
+                switch (this.currentViewMode) {
+                    case 'clusters':
+                        return this.getClusterColor(video.cluster_id);
+                    case 'anomalies':
+                        const anomaly = video.anomaly_score || 0;
+                        if (anomaly < 0.3) return new THREE.Color(this.professionalColors.anomaly.low);
+                        if (anomaly < 0.7) return new THREE.Color(this.professionalColors.anomaly.medium);
+                        return new THREE.Color(this.professionalColors.anomaly.high);
+                    case 'events':
+                        return new THREE.Color(this.professionalColors.events[video.main_event] || this.professionalColors.events.unknown);
+                    default:
+                        return new THREE.Color(0x2962ff);
+                }
+            }
+            
+            getClusterColor(clusterId) {
+                if (!this.clusterColors.has(clusterId)) {
+                    const colorIndex = this.clusterColors.size % this.professionalColors.clusters.length;
+                    const color = new THREE.Color(this.professionalColors.clusters[colorIndex]);
+                    this.clusterColors.set(clusterId, color);
+                }
+                return this.clusterColors.get(clusterId);
+            }
+            
+            updateStatistics(videos) {
+                const anomalies = videos.filter(v => v.anomaly_score > 0.5).length;
+                const clusters = [...new Set(videos.map(v => v.cluster_id))].length;
+                const avgAnomaly = videos.reduce((sum, v) => sum + (v.anomaly_score || 0), 0) / videos.length;
+                
+                document.getElementById('stat-anomalies').textContent = anomalies;
+                document.getElementById('stat-clusters').textContent = clusters;
+                document.getElementById('stat-avg-anomaly').textContent = (avgAnomaly * 100).toFixed(1) + '%';
+            }
+            
+            updateClusterList(videos) {
+                const clusters = {};
+                videos.forEach(video => {
+                    const clusterId = video.cluster_id || 'unknown';
+                    if (!clusters[clusterId]) {
+                        clusters[clusterId] = { count: 0, color: this.getClusterColor(clusterId) };
+                    }
+                    clusters[clusterId].count++;
+                });
+                
+                const clusterList = document.getElementById('cluster-list');
+                clusterList.innerHTML = '';
+                
+                Object.entries(clusters).forEach(([id, data]) => {
+                    const item = document.createElement('div');
+                    item.className = 'cluster-item';
+                    item.innerHTML = `
+                        <div>
+                            <span class="cluster-color" style="background: #${data.color.getHexString()}"></span>
+                            Cluster ${id}
+                        </div>
+                        <span class="cluster-count">${data.count} videos</span>
+                    `;
+                    item.addEventListener('click', () => this.focusOnCluster(id));
+                    clusterList.appendChild(item);
+                });
+            }
+            
+            focusOnCluster(clusterId) {
+                const clusterBubbles = this.bubbles.filter(b => b.video.cluster_id == clusterId);
+                if (clusterBubbles.length === 0) return;
+                
+                // Calculate center of cluster
+                let center = new THREE.Vector3();
+                clusterBubbles.forEach(bubble => {
+                    center.add(bubble.mesh.position);
+                });
+                center.divideScalar(clusterBubbles.length);
+                
+                // Animate camera to cluster
+                this.focusOnPoint(center);
+                
+                // Highlight cluster bubbles
+                this.bubbles.forEach(bubble => {
+                    const isInCluster = bubble.video.cluster_id == clusterId;
+                    bubble.targetScale = isInCluster ? bubble.originalScale * 1.5 : bubble.originalScale * 0.5;
+                    bubble.mesh.material.opacity = isInCluster ? 0.8 : 0.2;
+                });
+            }
+            
+            setViewMode(mode) {
+                this.currentViewMode = mode;
+                
+                // Update bubble colors
+                this.bubbles.forEach(bubble => {
+                    const color = this.getColorForVideo(bubble.video);
+                    bubble.mesh.material.color = color;
+                });
+            }
+            
+            applyFilters() {
+                // Update filter values
+                this.filters.event = document.getElementById('filter-event').value;
+                this.filters.location = document.getElementById('filter-location').value;
+                this.filters.anomalyMin = parseFloat(document.getElementById('filter-anomaly').value);
+                
+                // Filter videos
+                const filteredVideos = this.allVideos.filter(video => {
+                    if (this.filters.event && video.main_event !== this.filters.event) return false;
+                    if (this.filters.location && video.location !== this.filters.location) return false;
+                    if ((video.anomaly_score || 0) < this.filters.anomalyMin) return false;
+                    return true;
+                });
+                
+                // Update visualization
+                this.scene.remove(...this.bubbles.map(b => b.mesh));
+                this.createBubbles(filteredVideos);
+                this.updateStatistics(filteredVideos);
+                this.updateClusterList(filteredVideos);
+                
+                // Update counts
+                document.getElementById('visible-videos').textContent = filteredVideos.length;
+                document.getElementById('status').textContent = `Showing ${filteredVideos.length} of ${this.allVideos.length} videos`;
+            }
+            
+            clearFilters() {
+                // Reset filter inputs
+                document.getElementById('filter-event').value = '';
+                document.getElementById('filter-location').value = '';
+                document.getElementById('filter-anomaly').value = '0';
+                document.getElementById('anomaly-value').textContent = '0.0';
+                
+                // Reset filters
+                this.filters = {
+                    event: '',
+                    location: '',
+                    anomalyMin: 0
+                };
+                
+                // Show all videos
+                this.scene.remove(...this.bubbles.map(b => b.mesh));
+                this.createBubbles(this.allVideos);
+                this.updateStatistics(this.allVideos);
+                this.updateClusterList(this.allVideos);
+                
+                document.getElementById('visible-videos').textContent = this.allVideos.length;
+                document.getElementById('status').textContent = `Showing all ${this.allVideos.length} videos`;
+            }
+            
+            searchVideos(query) {
+                if (!query) {
+                    this.bubbles.forEach(bubble => {
+                        bubble.mesh.material.opacity = 0.6;
+                        bubble.targetScale = bubble.originalScale;
+                    });
+                    return;
+                }
+                
+                const lowerQuery = query.toLowerCase();
+                
+                this.bubbles.forEach(bubble => {
+                    const video = bubble.video;
+                    const matches = 
+                        (video.title && video.title.toLowerCase().includes(lowerQuery)) ||
+                        (video.video_id && video.video_id.toLowerCase().includes(lowerQuery)) ||
+                        (video.main_event && video.main_event.toLowerCase().includes(lowerQuery)) ||
+                        (video.location && video.location.toLowerCase().includes(lowerQuery));
+                    
+                    bubble.mesh.material.opacity = matches ? 0.8 : 0.2;
+                    bubble.targetScale = matches ? bubble.originalScale * 1.3 : bubble.originalScale * 0.7;
+                });
+            }
+            
+            checkHover(event) {
+                this.raycaster.setFromCamera(this.mouse, this.camera);
+                const intersects = this.raycaster.intersectObjects(this.bubbles.map(b => b.mesh));
+                
+                const hoverInfo = document.getElementById('hover-info');
+                
+                if (intersects.length > 0) {
+                    const bubble = intersects[0].object;
+                    const video = bubble.userData.video;
+                    
+                    // Only update if different bubble
+                    if (this.hoveredBubble !== bubble) {
+                        // Reset previous hover
+                        if (this.hoveredBubble) {
+                            const prevBubbleData = this.bubbles.find(b => b.mesh === this.hoveredBubble);
+                            if (prevBubbleData) {
+                                prevBubbleData.mesh.scale.setScalar(prevBubbleData.currentScale);
+                            }
+                        }
+                        
+                        // Set new hover
+                        this.hoveredBubble = bubble;
+                        const bubbleData = this.bubbles.find(b => b.mesh === bubble);
+                        if (bubbleData) {
+                            bubble.scale.setScalar(bubbleData.currentScale * 1.2);
+                        }
+                    }
+                    
+                    hoverInfo.innerHTML = `
+                        <strong>${video.title || video.video_id}</strong>
+                        <div style="color: #888; margin-top: 4px; line-height: 1.5;">
+                            Event: ${video.main_event || 'Unknown'}<br>
+                            Location: ${video.location || 'Unknown'}<br>
+                            Anomaly: ${(video.anomaly_score * 100).toFixed(1)}%<br>
+                            Cluster: ${video.cluster_id !== undefined ? video.cluster_id : 'N/A'}
+                        </div>
+                    `;
+                    hoverInfo.style.display = 'block';
+                    hoverInfo.style.left = event.clientX + 15 + 'px';
+                    hoverInfo.style.top = event.clientY - 10 + 'px';
+                    
+                    this.renderer.domElement.style.cursor = 'pointer';
+                } else {
+                    // Reset hover
+                    if (this.hoveredBubble) {
+                        const bubbleData = this.bubbles.find(b => b.mesh === this.hoveredBubble);
+                        if (bubbleData) {
+                            this.hoveredBubble.scale.setScalar(bubbleData.currentScale);
+                        }
+                        this.hoveredBubble = null;
+                    }
+                    
+                    hoverInfo.style.display = 'none';
+                    if (!this.isDragging && !this.isPanning) {
+                        this.renderer.domElement.style.cursor = 'grab';
+                    }
+                }
+            }
+            
+            checkClick(event) {
+                this.raycaster.setFromCamera(this.mouse, this.camera);
+                const intersects = this.raycaster.intersectObjects(this.bubbles.map(b => b.mesh));
+                
+                if (intersects.length > 0) {
+                    const bubble = intersects[0].object;
+                    const video = bubble.userData.video;
+                    
+                    // Show detail panel
+                    this.showDetailPanel(video);
+                    
+                    // Update status
+                    document.getElementById('status').textContent = `Selected: ${video.title || video.video_id}`;
+                    
+                    // Highlight selected bubble
+                    this.selectBubble(bubble);
+                }
+            }
+            
+            selectBubble(bubble) {
+                // Reset previous selection
+                if (this.selectedBubble) {
+                    this.selectedBubble.material.emissive = new THREE.Color(0x000000);
+                }
+                
+                // Highlight new selection
+                bubble.material.emissive = new THREE.Color(0x2962ff);
+                bubble.material.emissiveIntensity = 0.2;
+                this.selectedBubble = bubble;
+            }
+            
+            showDetailPanel(video) {
+                const panel = document.getElementById('detail-panel');
+                const title = document.getElementById('detail-title');
+                const content = document.getElementById('detail-content');
+                
+                title.textContent = video.title || video.video_id;
+                
+                const anomalyColor = video.anomaly_score > 0.7 ? '#e53935' : 
+                                   video.anomaly_score > 0.3 ? '#fb8c00' : '#43a047';
+                
+                content.innerHTML = `
+                    <div class="detail-section">
+                        <h4>Event Information</h4>
+                        <div class="detail-info">
+                            <span class="detail-label">Type:</span>
+                            <span class="detail-value">${video.main_event || 'Unknown'}</span>
+                            <span class="detail-label">Location:</span>
+                            <span class="detail-value">${video.location || 'Unknown'}</span>
+                            <span class="detail-label">Time:</span>
+                            <span class="detail-value">${video.event_time || 'Unknown'}</span>
+                            <span class="detail-label">Duration:</span>
+                            <span class="detail-value">${video.duration || 'Unknown'}s</span>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <h4>Analysis Results</h4>
+                        <div class="detail-info">
+                            <span class="detail-label">Anomaly Score:</span>
+                            <span class="detail-value" style="color: ${anomalyColor}">
+                                ${(video.anomaly_score * 100).toFixed(1)}%
+                            </span>
+                            <span class="detail-label">Cluster ID:</span>
+                            <span class="detail-value">${video.cluster_id !== undefined ? video.cluster_id : 'N/A'}</span>
+                            <span class="detail-label">Scene:</span>
+                            <span class="detail-value">${video.scene_description || 'N/A'}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <h4>Video Player</h4>
+                        <div class="video-player-placeholder">
+                            Video player will be available<br>once API is configured
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <h4>Additional Details</h4>
+                        <div class="detail-info">
+                            <span class="detail-label">Video ID:</span>
+                            <span class="detail-value" style="font-family: monospace; font-size: 11px;">${video.video_id}</span>
+                            <span class="detail-label">Processed:</span>
+                            <span class="detail-value">${video.processed_at || 'Unknown'}</span>
+                            <span class="detail-label">Tags:</span>
+                            <span class="detail-value">${video.tags?.join(', ') || 'None'}</span>
+                        </div>
+                    </div>
+                `;
+                
+                panel.classList.add('open');
+            }
+            
+            checkDoubleClick(event) {
+                this.raycaster.setFromCamera(this.mouse, this.camera);
+                const intersects = this.raycaster.intersectObjects(this.bubbles.map(b => b.mesh));
+                
+                if (intersects.length > 0) {
+                    const point = intersects[0].point;
+                    this.focusOnPoint(point);
+                }
+            }
+            
+            focusOnPoint(point) {
+                const duration = 1000;
+                const startTime = Date.now();
+                const startTarget = this.targetCameraTarget.clone();
+                const startDistance = this.targetCameraDistance;
+                
+                const animate = () => {
+                    const elapsed = Date.now() - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+                    const eased = this.easeInOutCubic(progress);
+                    
+                    this.targetCameraTarget.lerpVectors(startTarget, point, eased);
+                    this.targetCameraDistance = startDistance + (30 - startDistance) * eased;
+                    
+                    if (progress < 1) {
+                        requestAnimationFrame(animate);
+                    }
+                };
+                
+                animate();
+            }
+            
+            animateIntro() {
+                const duration = 2000;
+                const startTime = Date.now();
+                const startDistance = 100;
+                const endDistance = 50;
+                const startAngleY = Math.PI / 2;
+                
+                const animate = () => {
+                    const elapsed = Date.now() - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+                    const eased = this.easeInOutCubic(progress);
+                    
+                    this.targetCameraDistance = startDistance + (endDistance - startDistance) * eased;
+                    this.targetCameraAngleY = startAngleY + (Math.PI / 4 - startAngleY) * eased;
+                    
+                    if (progress < 1) {
+                        requestAnimationFrame(animate);
+                    }
+                };
+                
+                animate();
+            }
+            
+            easeInOutCubic(t) {
+                return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+            }
+            
+            resetCamera() {
+                const duration = 1000;
+                const startTime = Date.now();
+                
+                const startAngleX = this.targetCameraAngleX;
+                const startAngleY = this.targetCameraAngleY;
+                const startDistance = this.targetCameraDistance;
+                const startTarget = this.targetCameraTarget.clone();
+                
+                const animate = () => {
+                    const elapsed = Date.now() - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+                    const eased = this.easeInOutCubic(progress);
+                    
+                    this.targetCameraAngleX = startAngleX + (0 - startAngleX) * eased;
+                    this.targetCameraAngleY = startAngleY + (Math.PI / 4 - startAngleY) * eased;
+                    this.targetCameraDistance = startDistance + (50 - startDistance) * eased;
+                    this.targetCameraTarget.lerpVectors(startTarget, new THREE.Vector3(0, 0, 0), eased);
+                    
+                    if (progress < 1) {
+                        requestAnimationFrame(animate);
+                    }
+                };
+                
+                animate();
+            }
+            
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                
+                // Update camera smoothly
+                this.updateCamera();
+                
+                // Animate bubbles
+                this.bubbles.forEach(bubble => {
+                    if (bubble.mesh.scale.x !== bubble.targetScale) {
+                        const scale = bubble.mesh.scale.x + (bubble.targetScale - bubble.mesh.scale.x) * 0.1;
+                        bubble.mesh.scale.set(scale, scale, scale);
+                        bubble.currentScale = scale;
+                    }
+                    
+                    // Gentle floating animation
+                    bubble.mesh.position.y += Math.sin(Date.now() * 0.001 + bubble.mesh.position.x) * 0.002;
+                });
+                
+                // Calculate FPS
+                const currentTime = performance.now();
+                const delta = currentTime - this.lastFrameTime;
+                this.frameCount++;
+                
+                if (this.frameCount >= 10) {
+                    this.fps = 1000 / (delta / this.frameCount);
+                    this.frameCount = 0;
+                    this.lastFrameTime = currentTime;
+                }
+                
+                // Render
+                this.renderer.render(this.scene, this.camera);
+            }
+            
+            start() {
+                this.loadData();
+                this.animate();
+            }
+        }
+        
+        // Close detail panel function
+        function closeDetailPanel() {
+            document.getElementById('detail-panel').classList.remove('open');
+        }
+        
+        // Start when ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                const app = new ProfessionalVisualization();
+                app.start();
+            });
+        } else {
+            const app = new ProfessionalVisualization();
+            app.start();
+        }
+    </script>
+</body>
+</html>

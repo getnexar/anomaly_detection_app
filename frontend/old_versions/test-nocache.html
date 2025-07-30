@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>No Cache Test</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+</head>
+<body>
+    <h1>Testing with timestamp to avoid cache</h1>
+    <div id="result"></div>
+    
+    <script>
+        const timestamp = Date.now();
+        const iframe = document.createElement('iframe');
+        iframe.src = `/?nocache=${timestamp}`;
+        iframe.width = '100%';
+        iframe.height = '600px';
+        iframe.style.border = '2px solid red';
+        document.body.appendChild(iframe);
+        
+        const result = document.getElementById('result');
+        
+        // Also test importing main.js directly with timestamp
+        setTimeout(async () => {
+            try {
+                result.innerHTML += '<p>Importing main.js with timestamp...</p>';
+                const mainModule = await import(`./js/main.js?t=${timestamp}`);
+                result.innerHTML += '<p style="color: green;">✓ Main.js imported successfully!</p>';
+                
+                // Check if VideoAnalysisApp exists
+                if (window.VideoAnalysisApp) {
+                    result.innerHTML += '<p style="color: green;">✓ VideoAnalysisApp class exists</p>';
+                } else {
+                    result.innerHTML += '<p style="color: red;">✗ VideoAnalysisApp class NOT FOUND</p>';
+                }
+                
+            } catch (e) {
+                result.innerHTML += `<p style="color: red;">✗ Import failed: ${e.message}</p>`;
+                console.error('Import error:', e);
+            }
+        }, 1000);
+    </script>
+</body>
+</html>

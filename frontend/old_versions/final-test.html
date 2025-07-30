@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Final Test - Step by Step</title>
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/components.css">
+    <style>
+        .test-container {
+            padding: 20px;
+            background: #1a1a1a;
+            color: white;
+            font-family: monospace;
+        }
+        .step {
+            margin: 10px 0;
+            padding: 10px;
+            background: #2a2a2a;
+            border-radius: 4px;
+        }
+        .success { background: #1a3a1a; }
+        .error { background: #3a1a1a; }
+        .warning { background: #3a3a1a; }
+        button {
+            margin: 5px;
+            padding: 10px 20px;
+            background: #007aff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover { background: #0051a8; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="test-container">
+            <h1>Final Test - Debugging Step by Step</h1>
+            
+            <button onclick="runFullTest()">Run Full Test</button>
+            <button onclick="testJustHideLoading()">Just Hide Loading</button>
+            <button onclick="checkConsoleErrors()">Check Console Errors</button>
+            
+            <div id="steps"></div>
+        </div>
+        
+        <div id="loading-indicator" class="loading-overlay">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Loading video data...</div>
+        </div>
+    </div>
+    
+    <script type="module">
+        window.addStep = function(message, type = 'info') {
+            const steps = document.getElementById('steps');
+            const step = document.createElement('div');
+            step.className = `step ${type}`;
+            const time = new Date().toLocaleTimeString();
+            step.innerHTML = `[${time}] ${message}`;
+            steps.appendChild(step);
+            console.log(`[${type}] ${message}`);
+        };
+        
+        window.testJustHideLoading = function() {
+            const loader = document.getElementById('loading-indicator');
+            addStep('Loading indicator found: ' + (loader ? 'YES' : 'NO'));
+            if (loader) {
+                loader.style.display = 'none';
+                addStep('Loading indicator hidden', 'success');
+            }
+        };
+        
+        window.checkConsoleErrors = function() {
+            // Capture any errors
+            const errors = [];
+            const originalError = console.error;
+            console.error = function(...args) {
+                errors.push(args.join(' '));
+                originalError.apply(console, args);
+            };
+            
+            addStep(`Captured ${errors.length} console errors`);
+            errors.forEach(err => addStep(err, 'error'));
+        };
+        
+        window.runFullTest = async function() {
+            document.getElementById('steps').innerHTML = '';
+            addStep('Starting full test...');
+            
+            try {
+                // Step 1: Import modules
+                addStep('Step 1: Importing modules...');
+                const modules = {};
+                
+                try {
+                    modules.EventBus = (await import('./js/utils/EventBus.js')).EventBus;
+                    addStep('✓ EventBus imported', 'success');
+                } catch (e) {
+                    addStep(`✗ EventBus import failed: ${e.message}`, 'error');
+                }
+                
+                try {
+                    modules.APIClient = (await import('./js/services/APIClient.js')).APIClient;
+                    addStep('✓ APIClient imported', 'success');
+                } catch (e) {
+                    addStep(`✗ APIClient import failed: ${e.message}`, 'error');
+                }
+                
+                try {
+                    modules.THREE = await import('https://unpkg.com/three@0.150.0/build/three.module.js');
+                    addStep('✓ Three.js imported', 'success');
+                } catch (e) {
+                    addStep(`✗ Three.js import failed: ${e.message}`, 'error');
+                }
+                
+                // Step 2: Test API
+                addStep('Step 2: Testing API...');
+                try {
+                    const apiClient = new modules.APIClient('/api');
+                    const health = await apiClient.getHealth();
+                    addStep(`✓ API Health: ${health.status}`, 'success');
+                    
+                    const videos = await apiClient.getVideos({ page: 1, per_page: 5 });
+                    addStep(`✓ Videos loaded: ${videos.videos.length}`, 'success');
+                } catch (e) {
+                    addStep(`✗ API test failed: ${e.message}`, 'error');
+                }
+                
+                // Step 3: Test main app class
+                addStep('Step 3: Testing main app...');
+                try {
+                    const mainModule = await import('./js/main.js');
+                    addStep('✓ Main module imported', 'success');
+                    
+                    if (window.VideoAnalysisApp) {
+                        addStep('✓ VideoAnalysisApp class exists', 'success');
+                    } else {
+                        addStep('✗ VideoAnalysisApp class NOT FOUND', 'error');
+                    }
+                    
+                    if (window.videoAnalysisApp) {
+                        addStep('✓ App instance exists', 'success');
+                        addStep(`App state: ${JSON.stringify(window.videoAnalysisApp.appState)}`, 'info');
+                    } else {
+                        addStep('⚠ App instance not found, creating...', 'warning');
+                        window.videoAnalysisApp = new window.VideoAnalysisApp();
+                        addStep('✓ App instance created', 'success');
+                    }
+                } catch (e) {
+                    addStep(`✗ Main app test failed: ${e.message}`, 'error');
+                    addStep(`Stack: ${e.stack}`, 'error');
+                }
+                
+                // Step 4: Hide loading
+                addStep('Step 4: Hiding loading indicator...');
+                testJustHideLoading();
+                
+                addStep('Test complete!', 'success');
+                
+            } catch (error) {
+                addStep(`Fatal error: ${error.message}`, 'error');
+                addStep(`Stack: ${error.stack}`, 'error');
+            }
+        };
+        
+        // Auto-run on load
+        setTimeout(() => {
+            addStep('Page loaded, waiting 2 seconds...');
+            setTimeout(() => {
+                addStep('Checking if app loaded...');
+                const loader = document.getElementById('loading-indicator');
+                if (loader && loader.style.display !== 'none') {
+                    addStep('⚠️ Still showing loading screen!', 'warning');
+                    runFullTest();
+                } else {
+                    addStep('✅ App loaded successfully!', 'success');
+                }
+            }, 2000);
+        }, 500);
+    </script>
+</body>
+</html>
